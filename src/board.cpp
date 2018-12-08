@@ -60,23 +60,6 @@ Board::Board()
 
     initAttacks();
     bitboard targetBitmap = ~m_white.getAllPieces();
-    Move move;
-
-    move.piece(WHITE_KNIGHT);
-    bitboard tempPiece = m_white.m_knights;
-
-    while (tempPiece)
-    {
-        bitboard from = firstOne(tempPiece);
-        bitboard tempMove = KNIGHT_ATTACKS[from] & targetBitmap;
-
-        while (tempMove)
-        {
-            bitboard to = firstOne(tempMove);
-            move.to(to);
-            //move.capture(board.square[to]);
-        }
-    }
 }
 
 pasteque_namespace_end
