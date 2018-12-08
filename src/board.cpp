@@ -59,7 +59,7 @@ Board::Board()
         bit_set(m_black.m_pawns, i);
 
     initAttacks();
-    bitboard targetBitmap = ~m_white.getAllPieces();
+    //bitboard targetBitmap = ~m_white.getAllPieces();
 }
 
 pasteque_namespace_end
