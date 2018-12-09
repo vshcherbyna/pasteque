@@ -30,6 +30,8 @@ int Uci::handleCmdLine(int argc, char *argv[])
     std::string line;
     std::cout.setf(std::ios::unitbuf);
 
+    std::cout << "pasteque 0.0 by Volodymyr Shcherbyna" << std::endl;
+
     while (std::getline(std::cin, line))
     {
         if (line == "uci")

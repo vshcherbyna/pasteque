@@ -21,15 +21,12 @@
 
 #include "uci.h"
 #include "board.h"
-#include <iostream>
 
 #if !defined(UNIT_TEST)
 int main(int argc, char *argv[])
 {
     pasteque::Board b;
     pasteque::Uci handler;
-
-    std::cout << "pasteque 0.0 by Volodymyr Shcherbyna" << std::endl;
 
     return handler.handleCmdLine(argc, argv);
 }

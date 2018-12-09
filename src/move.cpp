@@ -23,34 +23,32 @@
 
 pasteque_namespace_begin
 
-Move::Move()
+Move::Move() : m_move{0}
 {
-    reset();
 }
 
-void Move::reset()
+void Move::from(unsigned char from)
 {
-    m_move = 0;
+    m_move &= 0xffffffc0;
+    m_move |= (from & 0x0000003f);
 }
 
-void Move::from(unsigned char square_from)
+void Move::to(unsigned char to)
 {
-    m_move &= 0xffffffc0; m_move |= (square_from & 0x0000003f);
-}
-
-void Move::to(unsigned char square_to)
-{
-    m_move &= 0xfffff03f; m_move |= (square_to & 0x0000003f) << 6;
+    m_move &= 0xfffff03f;
+    m_move |= (to & 0x0000003f) << 6;
 }
 
 void Move::piece(unsigned char piece)
 {
-    m_move &= 0xffff0fff; m_move |= (piece & 0x0000000f) << 12;
+    m_move &= 0xffff0fff;
+    m_move |= (piece & 0x0000000f) << 12;
 }
 
 void Move::capture(unsigned char capture)
 {
-    m_move &= 0xfff0ffff; m_move |= (capture & 0x0000000f) << 16;
+    m_move &= 0xfff0ffff;
+    m_move |= (capture & 0x0000000f) << 16;
 }
 
 pasteque_namespace_end

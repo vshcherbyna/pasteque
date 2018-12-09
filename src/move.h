@@ -37,13 +37,11 @@ public:
     Move();
 
 public:
-    void from(unsigned char square_from);
-    void to(unsigned char square_to);
-    void piece(unsigned char piece);
-    void capture(unsigned char capture);
-
-private:
-    void reset();
+    void from(unsigned char);
+    void to(unsigned char);
+    void piece(unsigned char);
+    void capture(unsigned char);
+    operator int() const {return m_move;}
 
 private:
     unsigned int m_move;
