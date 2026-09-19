@@ -26,6 +26,7 @@
 #include "bitboard.h"
 
 pasteque_namespace_begin
+
 void initAttacks();
 pasteque_namespace_end
 #endif // ATTACKS_H

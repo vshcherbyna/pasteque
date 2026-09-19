@@ -36,11 +36,11 @@ public:
 
 public:
     bitboard    m_king,
-        m_queen,
-        m_rooks,
-        m_bishops,
-        m_knights,
-        m_pawns;
+                m_queen,
+                m_rooks,
+                m_bishops,
+                m_knights,
+                m_pawns;
 };
 
 pasteque_namespace_end

@@ -22,6 +22,8 @@
 #ifndef BITBOARD_H
 #define BITBOARD_H
 
+#include <stdint.h>
+
 #include "pasteque.h"
 
 pasteque_namespace_begin
@@ -74,6 +76,25 @@ enum
 
 #define bit_set(number, bit) number |= 1ULL << bit
 #define bit_unset(number, bit) number &= (~(1ULL << bit))
+
+static int firstOne(bitboard bitmap)
+{
+    // De Bruijn Multiplication, see http://chessprogramming.wikispaces.com/BitScan
+    // don't use this if bitmap = 0
+
+    static const int INDEX64[64] = {
+    63,  0, 58,  1, 59, 47, 53,  2,
+    60, 39, 48, 27, 54, 33, 42,  3,
+    61, 51, 37, 40, 49, 18, 28, 20,
+    55, 30, 34, 11, 43, 14, 22,  4,
+    62, 57, 46, 52, 38, 26, 32, 41,
+    50, 36, 17, 19, 29, 10, 13, 21,
+    56, 45, 25, 31, 35, 16,  9, 12,
+    44, 24, 15,  8, 23,  7,  6,  5 };
+
+    static const uint64_t DEBRUIJN64 = 0x07EDD5E59A4E28C2;
+    return INDEX64[((bitmap & -bitmap) * DEBRUIJN64) >> 58];
+}
 
 pasteque_namespace_end
 #endif // BITBOARD_H

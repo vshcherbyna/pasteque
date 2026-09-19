@@ -19,20 +19,33 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "uci.h"
+#ifndef MOVES_H
+#define MOVES_H
+
+#include <list>
+
+#include "pasteque.h"
+#include "move.h"
 #include "board.h"
-#include "moves.h"
 
-#if !defined(UNIT_TEST)
-int main(int argc, char *argv[])
+pasteque_namespace_begin
+
+class Moves
 {
-    pasteque::Board board;
-    pasteque::Moves moves(board);
+    using listOfMoves = std::list<Move>;
 
-    moves.allMoves();
+public:
+    Moves(Board board);
 
-    pasteque::Uci handler;
+public:
+    listOfMoves allMoves();
 
-    return handler.handleCmdLine(argc, argv);
-}
-#endif
+private:
+    listOfMoves moveKnights();
+
+private:
+    Board m_board;
+};
+
+pasteque_namespace_end
+#endif // MOVES_H

@@ -31,7 +31,7 @@ class Board
 {
 public:
     Board();
-private:
+
     Side m_white;
     Side m_black;
 };
