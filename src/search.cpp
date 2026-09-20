@@ -207,12 +207,6 @@ Move Search::bestMove(Board & board, const Clock & clock) {
     return deepen(board, clock.getDepth(), started, m_timed ? clock.getSoft() : 0);
 }
 
-//
-//  An iteration abandoned part way through has searched only some of the root moves, so
-//  its winner is not comparable with the rest. The move from the last finished iteration
-//  is kept instead
-//
-
 Move Search::deepen(Board & board, int depth, Instant started, unsigned int soft) {
 
     m_nodes = 0;
@@ -263,11 +257,6 @@ Move Search::deepen(Board & board, int depth, Instant started, unsigned int soft
 
         if (m_watcher)
             m_watcher(iteration, m_score, m_nodes, spent, best);
-
-        //
-        //  The next iteration costs several times this one, so starting one that the soft
-        //  budget cannot cover only risks being cut off with nothing to show for it
-        //
 
         if (soft && spent * 2 >= soft)
             break;

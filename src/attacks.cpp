@@ -139,10 +139,6 @@ static void initSliderKeys(SliderKey magics[64], bitboard table[], const int del
         magic.m_shift   = 64 - popCount(magic.m_mask);
         magic.m_attacks = table + offset;
 
-        //
-        //  Carry rippler, walks every subset of the mask
-        //
-
         bitboard occupied = 0;
         auto size = 0;
 

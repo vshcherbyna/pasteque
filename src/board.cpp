@@ -305,8 +305,7 @@ bool Board::makeMove(Move move, Rewind & undo) {
     auto to       = move.getTo();
 
     //
-    //  A king may not castle out of check, nor through an attacked square. The square
-    //  it lands on is covered by the check at the end
+    //  A king may not castle out of check, nor through an attacked square
     //
 
     if (move.isCastling() && (isAttacked(from, opponent) || isAttacked((from + to) / 2, opponent)))

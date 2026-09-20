@@ -84,11 +84,6 @@ int Uci::handleCmdLine(int argc, char *argv[]) {
 
     std::cout.setf(std::ios::unitbuf);
 
-    //
-    //  OpenBench starts the engine as 'pasteque bench' and reads the node count off the
-    //  last line it writes, so this has to answer before the protocol loop begins
-    //
-
     if (argc > 1 && std::string(argv[1]) == "bench")
         return bench(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(BENCH_DEPTH));
 

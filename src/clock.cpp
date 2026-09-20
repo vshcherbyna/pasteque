@@ -24,12 +24,6 @@
 
 pasteque_namespace_begin
 
-//
-//  A gui may report an expired clock as a negative number. Casting that straight to
-//  unsigned would read it as an enormous allowance, so anything at or below zero is
-//  taken as nothing left
-//
-
 static unsigned int number(const std::string & text) {
 
     auto value = std::atoi(text.c_str());
@@ -72,6 +66,7 @@ Clock::Clock(const std::vector<std::string> & tokens, unsigned char side) : Cloc
          haveClock = false;
 
     for (size_t i = 1; i + 1 < tokens.size(); ++i) {
+
         const auto & name  = tokens[i];
         const auto & value = tokens[i + 1];
 
@@ -105,22 +100,10 @@ Clock::Clock(const std::vector<std::string> & tokens, unsigned char side) : Cloc
     if (m_depth > DEPTH_CEILING)
         m_depth = DEPTH_CEILING;
 
-    //
-    //  A bare go, and go infinite, name no limit this engine can honour: the search runs
-    //  to completion and cannot be cut short by stop. Both are answered at a depth that
-    //  returns rather than left to run until the gui gives up
-    //
-
     if (!bounded) {
         m_depth = DEFAULT_DEPTH;
         return;
     }
-
-    //
-    //  Whether a limit was named decides this, never the number that came with it. An
-    //  allowance of zero is still an allowance, and trim answers it with the smallest
-    //  bounded search rather than letting it fall through to an endless one
-    //
 
     if (haveFixed) {
         m_soft    = trim(fixed, fixed);

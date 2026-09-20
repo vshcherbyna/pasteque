@@ -29,14 +29,6 @@
 
 pasteque_namespace_begin
 
-//
-//  Random legal positions, reached by playing random legal moves out of the standard
-//  opening position. They were produced by patches-pasteque/genbench.py spending the
-//  operating system's cryptographic random source on the move choices, so the list owes
-//  nothing to anyone's taste in chess. Re-running the generator replaces them wholesale,
-//  which moves the node count and is therefore a deliberate act, not a tidy-up
-//
-
 static const char * const POSITIONS[] = {
     "1n1qk2r/r1p3bp/p2ppn2/1p3pp1/2bP2P1/PPN1PP1N/2P3BP/1RBQK2R w Kk - 4 16",
     "1nbq2r1/1p2Bk2/2pp4/1p5p/r2P1pnP/4P3/P1P2PP1/RN1K1B1R w - - 1 21",
@@ -63,12 +55,6 @@ int benchCount() {
 const char * benchPosition(int index) {
     return POSITIONS[index];
 }
-
-//
-//  The last line is the one OpenBench reads, and it is the only line in the output that
-//  carries the words it looks for. Everything above it is for a human comparing two
-//  runs and wondering which position moved
-//
 
 int bench(int depth) {
 
