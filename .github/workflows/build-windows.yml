@@ -44,3 +44,16 @@ jobs:
         grep -q '^uciok$' smoke.txt
         grep -q '^readyok$' smoke.txt
         grep -q '^bestmove ' smoke.txt
+
+    # The node count is a watermark. The same positions searched to the same depth have to
+    # produce the same tree on every compiler and every platform, so a mismatch here is
+    # either a search change that bench.nodes should have been updated for in the same
+    # commit, or a real portability bug. OpenBench relies on exactly this property.
+    - name: Bench the engine
+      shell: bash
+      run: |
+        ./local/Release/pasteque.exe bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        # tr, not cat: a windows runner may check bench.nodes out with a carriage return
+        # on the end of it, and the comparison would then fail for no reason at all.
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"

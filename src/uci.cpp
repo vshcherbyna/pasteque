@@ -23,6 +23,7 @@
 #include <iostream>
 
 #include "uci.h"
+#include "bench.h"
 #include "moves.h"
 #include "search.h"
 #include "judge.h"
@@ -80,12 +81,18 @@ Uci::Uci() : m_departing{false} {
 }
 
 int Uci::handleCmdLine(int argc, char *argv[]) {
-    (void)argc;
-    (void)argv;
 
     std::string line;
 
     std::cout.setf(std::ios::unitbuf);
+
+    //
+    //  OpenBench starts the engine as 'pasteque bench' and reads the node count off the
+    //  last line it writes, so this has to answer before the protocol loop begins
+    //
+
+    if (argc > 1 && std::string(argv[1]) == "bench")
+        return bench(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(BENCH_DEPTH));
 
     std::cout << ENGINE_NAME << " by Volodymyr Shcherbyna" << std::endl;
 
@@ -115,8 +122,14 @@ void Uci::handleCommand(const std::string & line) {
         onPosition(tokens);
     else if (command == "go")
         onGo(tokens);
+    else if (command == "bench")
+        onBench(tokens);
     else if (command == "quit")
         onQuit();
+}
+
+void Uci::onBench(const std::vector<std::string> & tokens) {
+    bench(tokens.size() > 1 ? std::atoi(tokens[1].c_str()) : static_cast<int>(BENCH_DEPTH));
 }
 
 void Uci::onUci() {

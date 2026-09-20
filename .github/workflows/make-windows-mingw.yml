@@ -1,4 +1,4 @@
-name: Pasteque Windows Build MinGW
+name: Pasteque Windows MinGW Build with Make
 
 on:
   push:
@@ -20,12 +20,9 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
-    # MINGW64 is the x86_64 gcc environment. Ninja is pulled in rather than make because
-    # the MinGW Makefiles generator wants mingw32-make under that exact name, and naming
-    # the generator explicitly keeps this off whatever cmake would otherwise pick.
+    # MINGW64 is the x86_64 gcc environment. make comes from the msys package rather than
+    # mingw-w64-x86_64-make, which installs it under the name mingw32-make instead.
     - name: Set up MSYS2 MINGW64
       uses: msys2/setup-msys2@v2
       with:
@@ -33,24 +30,22 @@ jobs:
         update: true
         install: >-
           mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-ninja
+          make
 
-    - name: Configure CMake
-      run: cmake -S . -B local -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-    - name: Build the project
-      run: cmake --build local -j
-
-    - name: Run the unit tests
-      run: ./local/unit.exe
-
-    - name: Smoke the engine
+    - name: Show what make will be given
       run: |
-        printf 'uci\nisready\nposition startpos moves e2e4 e7e5\ngo depth 6\nquit\n' | ./local/pasteque.exe | tee smoke.txt
-        grep -q '^uciok$' smoke.txt
-        grep -q '^readyok$' smoke.txt
-        grep -q '^bestmove ' smoke.txt
+        g++ --version | head -1
+        make --version | head -1
+
+    # The makefile links the mingw runtime statically here, so the engine travels off
+    # this runner without dragging its dlls behind it.
+    - name: Build with make
+      run: make -j EXE=pasteque-ob
+
+    - name: Confirm nothing outside the system is linked in
+      run: |
+        ldd pasteque-ob.exe | tee links.txt || true
+        ! grep -iE 'libstdc\+\+|libgcc|libwinpthread' links.txt
 
     # The node count is a watermark. The same positions searched to the same depth have to
     # produce the same tree on every compiler and every platform, so a mismatch here is
@@ -58,7 +53,7 @@ jobs:
     # commit, or a real portability bug. OpenBench relies on exactly this property.
     - name: Bench the engine
       run: |
-        ./local/pasteque.exe bench | tee bench.txt
+        ./pasteque-ob bench | tee bench.txt
         tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
         # tr, not cat: a windows runner may check bench.nodes out with a carriage return
         # on the end of it, and the comparison would then fail for no reason at all.

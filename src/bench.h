@@ -19,48 +19,21 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef UCI_H
-#define UCI_H
-
-#include <string>
-#include <vector>
+#ifndef BENCH_H
+#define BENCH_H
 
 #include "pasteque.h"
-#include "board.h"
-#include "clock.h"
 
 pasteque_namespace_begin
 
-class Uci
+enum
 {
-public:
-    Uci();
-
-public:
-    int  handleCmdLine(int argc, char *argv[]);
-
-public:
-    void handleCommand(const std::string & line);
-
-    const Board & getBoard() const { return m_board; }
-    bool  departing() const { return m_departing; }
-
-private:
-    void onUci();
-    void onQuit();
-    void onIsReady();
-    void onNewGame();
-    void onPosition(const std::vector<std::string> & tokens);
-    void onGo(const std::vector<std::string> & tokens);
-    void onBench(const std::vector<std::string> & tokens);
-
-private:
-    bool playMove(const std::string & notation);
-
-private:
-    Board m_board;
-    bool  m_departing;
+    BENCH_DEPTH = 5
 };
 
+int          bench(int depth);
+int          benchCount();
+const char * benchPosition(int index);
+
 pasteque_namespace_end
-#endif // UCI_H
+#endif // BENCH_H
