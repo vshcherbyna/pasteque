@@ -28,7 +28,7 @@ pasteque_namespace_begin
 
 static const int ORDER_VALUES[8] = { 0, 3, 1, 0, 0, 3, 5, 9 };
 
-Search::Search() : m_nodes{0}, m_score{0}, m_watcher{nullptr} {
+Search::Search() : m_nodes{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();
 }
 
@@ -65,9 +65,26 @@ void Search::order(Moves & moves) {
     }
 }
 
+void Search::pollClock() {
+
+    if (m_timed && std::chrono::steady_clock::now() >= m_deadline)
+        m_aborted = true;
+}
+
+static unsigned long long spentMs(Instant started) {
+
+    auto span = std::chrono::steady_clock::now() - started;
+
+    return static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::milliseconds>(span).count());
+}
+
 int Search::quiescence(Board & board, int alpha, int beta, int ply) {
 
-    ++m_nodes;
+    if ((++m_nodes & POLL_MASK) == 0)
+        pollClock();
+
+    if (m_aborted)
+        return 0;
 
     if (ply >= PLY_LIMIT)
         return Judge::evaluate(board);
@@ -127,7 +144,11 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (depth <= 0)
         return quiescence(board, alpha, beta, ply);
 
-    ++m_nodes;
+    if ((++m_nodes & POLL_MASK) == 0)
+        pollClock();
+
+    if (m_aborted)
+        return 0;
 
     if (ply > 0 && board.getFifty() >= 100)
         return EVEN_SCORE;
@@ -169,6 +190,33 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
 
 Move Search::bestMove(Board & board, int depth) {
 
+    m_timed   = false;
+    m_aborted = false;
+
+    return deepen(board, depth, std::chrono::steady_clock::now(), 0);
+}
+
+Move Search::bestMove(Board & board, const Clock & clock) {
+
+    auto started = std::chrono::steady_clock::now();
+
+    m_timed   = !clock.isEndless();
+    m_aborted = false;
+
+    if (m_timed)
+        m_deadline = started + std::chrono::milliseconds(clock.getHard());
+
+    return deepen(board, clock.getDepth(), started, m_timed ? clock.getSoft() : 0);
+}
+
+//
+//  An iteration abandoned part way through has searched only some of the root moves, so
+//  its winner is not comparable with the rest. The move from the last finished iteration
+//  is kept instead
+//
+
+Move Search::deepen(Board & board, int depth, Instant started, unsigned int soft) {
+
     m_nodes = 0;
     m_score = 0;
 
@@ -180,11 +228,10 @@ Move Search::bestMove(Board & board, int depth) {
 
     order(moves);
 
-    auto best    = moves[0];
-    auto started = std::chrono::steady_clock::now();
+    auto best = moves[0];
 
     for (auto iteration = 1; iteration <= depth; ++iteration) {
-        auto alpha = -static_cast<int>(HUGE_SCORE);
+        auto alpha  = -static_cast<int>(HUGE_SCORE);
         auto chosen = 0;
 
         for (auto i = 0; i < moves.size(); ++i) {
@@ -194,11 +241,17 @@ Move Search::bestMove(Board & board, int depth) {
             auto score = -alphaBeta(board, -HUGE_SCORE, -alpha, iteration - 1, 1);
             board.unmakeMove(moves[i], undo);
 
+            if (m_aborted)
+                break;
+
             if (score > alpha) {
                 alpha  = score;
                 chosen = i;
             }
         }
+
+        if (m_aborted)
+            break;
 
         best    = moves[chosen];
         m_score = alpha;
@@ -208,12 +261,18 @@ Move Search::bestMove(Board & board, int depth) {
 
         moves[0] = best;
 
-        if (m_watcher) {
-            auto elapsed = std::chrono::steady_clock::now() - started;
-            auto msec    = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+        auto spent = spentMs(started);
 
-            m_watcher(iteration, m_score, m_nodes, static_cast<unsigned long long>(msec), best);
-        }
+        if (m_watcher)
+            m_watcher(iteration, m_score, m_nodes, spent, best);
+
+        //
+        //  The next iteration costs several times this one, so starting one that the soft
+        //  budget cannot cover only risks being cut off with nothing to show for it
+        //
+
+        if (soft && spent * 2 >= soft)
+            break;
     }
 
     return best;

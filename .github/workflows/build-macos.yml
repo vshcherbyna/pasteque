@@ -1,0 +1,48 @@
+name: Pasteque macOS arm64 Build with CMake
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:  # Allow manual triggering of the workflow
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ macos-latest ]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    # arm64 only, no fat binary. CMakeLists withholds the x86 -march from a non x86 target,
+    # which is what lets apple silicon take this build at all.
+    - name: Configure CMake
+      run: cmake -S . -B local -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+
+    - name: Build the project
+      run: cmake --build local -j
+
+    - name: Confirm the binaries are arm64 and nothing else
+      run: |
+        lipo -archs local/pasteque
+        test "$(lipo -archs local/pasteque)" = "arm64"
+        test "$(lipo -archs local/unit)" = "arm64"
+
+    - name: Run the unit tests
+      run: ./local/unit
+
+    - name: Smoke the engine
+      run: |
+        printf 'uci\nisready\nposition startpos moves e2e4 e7e5\ngo depth 6\nquit\n' | ./local/pasteque | tee smoke.txt
+        grep -q '^uciok$' smoke.txt
+        grep -q '^readyok$' smoke.txt
+        grep -q '^bestmove ' smoke.txt

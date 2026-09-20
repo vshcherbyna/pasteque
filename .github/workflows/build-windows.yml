@@ -1,0 +1,46 @@
+name: Pasteque Windows Build with CMake
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:  # Allow manual triggering of the workflow
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ windows-latest ]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    # x64 only. The bitscan and popcount this engine leans on are 64 bit intrinsics, so a
+    # 32 bit target would not compile at all.
+    - name: Configure CMake
+      run: cmake -S . -B local -A x64
+
+    - name: Build the project
+      run: cmake --build local --config Release
+
+    - name: Run the unit tests
+      run: local\Release\unit.exe
+      shell: cmd
+
+    # Driven through bash rather than a PowerShell pipe, which does not feed an engine's
+    # stdin reliably on these runners.
+    - name: Smoke the engine
+      shell: bash
+      run: |
+        printf 'uci\nisready\nposition startpos moves e2e4 e7e5\ngo depth 6\nquit\n' | ./local/Release/pasteque.exe | tee smoke.txt
+        grep -q '^uciok$' smoke.txt
+        grep -q '^readyok$' smoke.txt
+        grep -q '^bestmove ' smoke.txt

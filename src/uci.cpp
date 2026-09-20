@@ -192,24 +192,13 @@ void Uci::onPosition(const std::vector<std::string> & tokens) {
 
 void Uci::onGo(const std::vector<std::string> & tokens) {
 
-    auto depth = static_cast<int>(DEFAULT_DEPTH);
-
-    for (size_t i = 1; i + 1 < tokens.size(); ++i) {
-        if (tokens[i] == "depth")
-            depth = std::atoi(tokens[i + 1].c_str());
-    }
-
-    if (depth < 1)
-        depth = 1;
-
-    if (depth > DEPTH_CEILING)
-        depth = DEPTH_CEILING;
+    Clock clock(tokens, m_board.getSide());
 
     Search searcher;
 
     searcher.setWatcher(report);
 
-    auto best = searcher.bestMove(m_board, depth);
+    auto best = searcher.bestMove(m_board, clock);
 
     if (static_cast<int>(best) == 0)
         std::cout << "bestmove 0000" << std::endl;

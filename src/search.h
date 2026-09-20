@@ -25,12 +25,14 @@
 #include "pasteque.h"
 #include "board.h"
 #include "moves.h"
+#include "clock.h"
 
 pasteque_namespace_begin
 
 enum
 {
-    PLY_LIMIT = 128
+    PLY_LIMIT = 128,
+    POLL_MASK = 2047
 };
 
 typedef void (*Watcher)(int depth, int score, unsigned long long nodes, unsigned long long msec, Move best);
@@ -42,6 +44,7 @@ public:
 
 public:
     Move                bestMove(Board & board, int depth);
+    Move                bestMove(Board & board, const Clock & clock);
     void                setWatcher(Watcher watcher) { m_watcher = watcher; }
 
 public:
@@ -49,14 +52,20 @@ public:
     int                 getScore() const { return m_score; }
 
 private:
+    Move                deepen(Board & board, int depth, Instant started, unsigned int soft);
     int                 alphaBeta(Board & board, int alpha, int beta, int depth, int ply);
     int                 quiescence(Board & board, int alpha, int beta, int ply);
     void                order(Moves & moves);
+    void                pollClock();
 
 private:
     unsigned long long  m_nodes;
     int                 m_score;
     Watcher             m_watcher;
+
+    Instant             m_deadline;
+    bool                m_timed,
+                        m_aborted;
 };
 
 pasteque_namespace_end

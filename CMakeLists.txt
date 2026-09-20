@@ -13,12 +13,25 @@ if (MSVC)
     SET(CMAKE_CXX_FLAGS_RELEASE "/MT /O2 /Ob2 /DNDEBUG")
 endif (MSVC)
 
-if (UNIX)
+if (NOT MSVC)
     add_definitions(-DNDEBUG)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -O3 -march=barcelona -pthread")
-endif (UNIX)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -pthread")
+
+    # -march names an x86 model, so it is only offered to an x86 target. Apple silicon and
+    # any other arm host take the same build without it. This engine is 64 bit only: the
+    # bitscan and popcount it leans on are 64 bit intrinsics.
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=barcelona")
+    endif ()
+endif ()
 
 add_executable(pasteque ${SRCFILES} ${HDRFILES})
+
+# -Werror belongs to this engine's own sources. Setting it globally would hand it to
+# googletest as well, where a newer compiler warning is not ours to fix.
+if (NOT MSVC)
+    target_compile_options(pasteque PRIVATE -Wall -Werror)
+endif ()
 
 if (EXISTS ${PROJECT_SOURCE_DIR}/external/googletest/CMakeLists.txt)
     add_subdirectory(external/googletest)
@@ -28,6 +41,9 @@ if (EXISTS ${PROJECT_SOURCE_DIR}/external/googletest/CMakeLists.txt)
     add_executable(unit ${UTSRCFILES} ${SRCFILES} ${HDRFILES})
     target_link_libraries(unit gtest gtest_main)
     target_compile_definitions(unit PRIVATE UNIT_TEST)
+    if (NOT MSVC)
+        target_compile_options(unit PRIVATE -Wall -Werror)
+    endif ()
 else ()
     message(STATUS "external/googletest is empty, skipping unit tests")
 endif ()

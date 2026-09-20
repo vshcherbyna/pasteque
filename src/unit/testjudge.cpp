@@ -42,8 +42,6 @@ static const char * POSITIONS[] = {
     "4k3/pp6/8/8/8/8/6PP/4K3 b - - 0 30"
 };
 
-static const int NPOS = sizeof(POSITIONS) / sizeof(POSITIONS[0]);
-
 //
 //  The same position with the two sides exchanged: ranks reversed, piece letters swapped
 //  in case, side to move and castling rights swapped, ep square reflected
@@ -147,7 +145,7 @@ TEST(Judge, Symmetry)
         EXPECT_EQ(evaluate(fen), evaluate(mirror(fen))) << fen << "  ->  " << mirror(fen);
 }
 
-TEST(Hce_mirror, Positive)
+TEST(Judge_mirror, Positive)
 {
     //  the helper the symmetry test leans on has to be right itself
 
@@ -180,7 +178,7 @@ TEST(Judge, Positive)
     EXPECT_NE(evaluate("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"), int(EVEN_SCORE));
 }
 
-TEST(Hce_phase, Positive)
+TEST(Judge_phase, Positive)
 {
     Board board;
 
@@ -194,7 +192,7 @@ TEST(Hce_phase, Positive)
     EXPECT_EQ(Judge::phase(board), 4);
 }
 
-TEST(Hce_pieceSquare, Positive)
+TEST(Judge_pieceSquare, Positive)
 {
     Judge::init();
 
