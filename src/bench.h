@@ -1,9 +1,7 @@
 /*
 *  pastèque - uci chess engine
 *
-*  Copyright (C) 2018 by Volodymyr M. Shcherbyna <volodymyr@shcherbyna.com>
-*
-*      This file is part of pastèque.
+*  Copyright (C) 2018-2026 Volodymyr Shcherbyna <volodymyr@shcherbyna.com>
 *
 *  pastèque is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
