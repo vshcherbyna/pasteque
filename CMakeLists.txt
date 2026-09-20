@@ -27,6 +27,20 @@ if (NOT MSVC)
     endif ()
 endif ()
 
+# _BTYPE=1 takes the sliders through pext instead of the magic multiply. It is asked for
+# rather than detected: pext is fast on intel from haswell and on amd from zen 3, and slow
+# enough on the zen 1 and zen 2 parts that guessing wrong costs more than it wins.
+#
+# pext is an x86 instruction. On any other target the define is still accepted and the
+# sliders stay on the magic multiply, so -mbmi2 is only ever offered to an x86 compiler.
+if (DEFINED _BTYPE)
+    add_definitions(-D_BTYPE=${_BTYPE})
+
+    if (NOT MSVC AND _BTYPE STREQUAL "1" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mbmi2")
+    endif ()
+endif ()
+
 add_executable(pasteque ${SRCFILES} ${HDRFILES})
 
 # -Werror belongs to this engine's own sources. Setting it globally would hand it to

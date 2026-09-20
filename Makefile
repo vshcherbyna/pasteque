@@ -7,6 +7,7 @@
 #     make EXE=pasteque-dev     # ... under another name
 #     make bench                # build, then run the bench the same way OpenBench will
 #     make CC=clang++           # any compiler that speaks c++17
+#     make BTYPE=1              # sliders by pext rather than the magic multiply
 #
 # CMakeLists.txt remains the build the unit tests and the IDEs use. This file exists so
 # that a machine with nothing but a compiler and make can produce the same engine.
@@ -22,7 +23,8 @@ SRC  = src/*.cpp
 STD   = -std=c++17
 WARN  = -Wall
 OPTIM = -O3 -funroll-loops
-DEFS  = -DNDEBUG
+BTYPE = 0
+DEFS  = -DNDEBUG -D_BTYPE=$(BTYPE)
 LIBS  = -pthread
 
 # What the compiler says about itself, asked once. The two questions worth asking are
@@ -48,6 +50,18 @@ endif
 
 ifneq ($(filter x86_64 amd64 AMD64,$(MACHINE)),)
     OPTIM += -march=native -mpopcnt
+endif
+
+# BTYPE is not detected from __BMI2__: the instruction is present on zen 1 and zen 2 and
+# microcoded there, so a machine that reports it is not a machine that wants it.
+#
+# pext is an x86 instruction, so -mbmi2 is only ever offered to an x86 host. Asking for
+# BTYPE=1 on apple silicon builds the engine with the magic multiply instead of failing.
+
+ifeq ($(BTYPE),1)
+ifneq ($(filter x86_64 amd64 AMD64,$(MACHINE)),)
+    OPTIM += -mbmi2
+endif
 endif
 
 CFLAGS = $(STD) $(WARN) $(OPTIM) $(DEFS)

@@ -23,13 +23,33 @@
 #include "pasteque.h"
 #include "bitboard.h"
 
+#if defined(_BTYPE) && (_BTYPE == 1)
+#if defined(__x86_64__) || defined(_M_X64)
+#define PASTEQUE_PEXT 1
+#endif
+#endif
+
+#if defined(PASTEQUE_PEXT)
+#if _WIN32 || _WIN64
+#include <immintrin.h>
+#endif
+#if __GNUC__
+#include <x86intrin.h>
+#endif
+#endif
+
 pasteque_namespace_begin
 
 struct SliderKey {
+#if defined(PASTEQUE_PEXT)
+    bitboard    m_mask;
+    bitboard *  m_attacks;
+#else
     bitboard    m_mask;
     bitboard    m_key;
     bitboard *  m_attacks;
     unsigned    m_shift;
+#endif
 };
 
 extern bitboard PAWN_ATTACKS[2][64];
@@ -45,15 +65,27 @@ extern bitboard LINE[64][64];
 void initAttacks();
 
 inline bitboard rookAttacks(int square, bitboard occupied) {
+#if defined(PASTEQUE_PEXT)
+    const auto & key = ROOK_KEYS[square];
+
+    return key.m_attacks[_pext_u64(occupied, key.m_mask)];
+#else
     const auto & magic = ROOK_KEYS[square];
 
     return magic.m_attacks[((occupied & magic.m_mask) * magic.m_key) >> magic.m_shift];
+#endif
 }
 
 inline bitboard bishopAttacks(int square, bitboard occupied) {
+#if defined(PASTEQUE_PEXT)
+    const auto & key = BISHOP_KEYS[square];
+
+    return key.m_attacks[_pext_u64(occupied, key.m_mask)];
+#else
     const auto & magic = BISHOP_KEYS[square];
 
     return magic.m_attacks[((occupied & magic.m_mask) * magic.m_key) >> magic.m_shift];
+#endif
 }
 
 inline bitboard queenAttacks(int square, bitboard occupied) {

@@ -1,0 +1,163 @@
+name: Pasteque pext Build (_BTYPE=1)
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:  # Allow manual triggering of the workflow
+
+# The bench watermark is the same whether the sliders go through pext or through the magic
+# multiply, so a build that quietly ignored _BTYPE=1 would pass every other check in this
+# repository. Each job therefore disassembles what it built and counts pext instructions:
+# on x86 there have to be some, and on arm64 there have to be none.
+
+jobs:
+  linux-cmake:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install the toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++ cmake binutils
+
+    - name: Configure CMake
+      run: cmake -S . -B local -DCMAKE_BUILD_TYPE=Release -D_BTYPE=1
+
+    - name: Build the project
+      run: cmake --build local -j
+
+    - name: Confirm the sliders really went through pext
+      run: |
+        count=$(objdump -d local/pasteque | grep -cw pext || true)
+        echo "pext instructions: $count"
+        test "$count" -gt 0
+
+    - name: Run the unit tests
+      run: ./local/unit
+
+    - name: Smoke the engine
+      run: |
+        printf 'uci\nisready\nposition startpos moves e2e4 e7e5\ngo depth 6\nquit\n' | ./local/pasteque | tee smoke.txt
+        grep -q '^uciok$' smoke.txt
+        grep -q '^readyok$' smoke.txt
+        grep -q '^bestmove ' smoke.txt
+
+    # The node count is a watermark. The same positions searched to the same depth have to
+    # produce the same tree on every compiler and every platform, so a mismatch here is
+    # either a search change that bench.nodes should have been updated for in the same
+    # commit, or a real portability bug. OpenBench relies on exactly this property.
+    - name: Bench the engine
+      run: |
+        ./local/pasteque bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        # tr, not cat: a windows runner may check bench.nodes out with a carriage return
+        # on the end of it, and the comparison would then fail for no reason at all.
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"
+
+  linux-make:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install the toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++ make binutils
+
+    - name: Build with make
+      run: make -j BTYPE=1 EXE=pasteque-pext
+
+    - name: Confirm the sliders really went through pext
+      run: |
+        count=$(objdump -d pasteque-pext | grep -cw pext || true)
+        echo "pext instructions: $count"
+        test "$count" -gt 0
+
+    - name: Bench the engine
+      run: |
+        ./pasteque-pext bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"
+
+  windows-cmake:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Configure CMake
+      run: cmake -S . -B local -A x64 -D_BTYPE=1
+
+    - name: Build the project
+      run: cmake --build local --config Release
+
+    # dumpbin is not on PATH on this runner, and vswhere is, at a fixed location.
+    - name: Confirm the sliders really went through pext
+      shell: pwsh
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $dumpbin = & $vswhere -latest -products * -find '**\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+        $count = (& $dumpbin /disasm:nobytes local\Release\pasteque.exe | Select-String -Pattern '\bpext\b').Count
+        Write-Output "pext instructions: $count"
+        if ($count -lt 1) { exit 1 }
+
+    - name: Run the unit tests
+      run: local\Release\unit.exe
+      shell: cmd
+
+    - name: Bench the engine
+      shell: bash
+      run: |
+        ./local/Release/pasteque.exe bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"
+
+  # Apple silicon has no pext and no equivalent, so _BTYPE=1 here is the fallback case:
+  # the define is accepted, the sliders stay on the magic multiply, -mbmi2 is never
+  # offered to the compiler, and the engine is the same engine. This job is the only
+  # place that difference is proved rather than assumed.
+  macos-make:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Show what make will be given
+      run: |
+        g++ --version | head -1
+        uname -m
+
+    - name: Build with make
+      run: make -j BTYPE=1 EXE=pasteque-pext
+
+    - name: Confirm the binary is arm64 and nothing else
+      run: |
+        lipo -archs pasteque-pext
+        test "$(lipo -archs pasteque-pext)" = "arm64"
+
+    - name: Confirm the sliders fell back to the magic multiply
+      run: |
+        count=$(otool -tV pasteque-pext | grep -cw pext || true)
+        echo "pext instructions: $count"
+        test "$count" -eq 0
+
+    - name: Bench the engine
+      run: |
+        ./pasteque-pext bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"

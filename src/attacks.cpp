@@ -109,7 +109,34 @@ static bitboard slidingMask(int square, const int deltas[4][2]) {
     return mask;
 }
 
-static bitboard s_randomSeed;
+#if defined(PASTEQUE_PEXT)
+
+static void initSliderKeys(SliderKey keys[64], bitboard table[], const int deltas[4][2]) {
+
+    auto offset = 0;
+
+    for (auto square = 0; square < 64; ++square) {
+
+        auto & key = keys[square];
+
+        key.m_mask    = slidingMask(square, deltas);
+        key.m_attacks = table + offset;
+
+        bitboard occupied = 0;
+
+        do {
+            key.m_attacks[_pext_u64(occupied, key.m_mask)] = slidingAttacks(square, occupied, deltas);
+
+            ++offset;
+            occupied = (occupied - key.m_mask) & key.m_mask;
+        }
+        while (occupied);
+    }
+}
+
+#else
+
+static bitboard s_randomSeed = 1070372;
 
 static bitboard random64() {
     s_randomSeed ^= s_randomSeed >> 12;
@@ -186,6 +213,8 @@ static void initSliderKeys(SliderKey magics[64], bitboard table[], const int del
     }
 }
 
+#endif
+
 void initAttacks() {
 
     static auto initialised = false;
@@ -218,8 +247,6 @@ void initAttacks() {
         PAWN_ATTACKS[WHITE][square] = white;
         PAWN_ATTACKS[BLACK][square] = black;
     }
-
-    s_randomSeed = 1070372;
 
     initSliderKeys(ROOK_KEYS, ROOK_TABLE, ROOK_DELTAS);
     initSliderKeys(BISHOP_KEYS, BISHOP_TABLE, BISHOP_DELTAS);
