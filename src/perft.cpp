@@ -19,23 +19,33 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "side.h"
+#include "perft.h"
+#include "moves.h"
 
 pasteque_namespace_begin
 
-Side::Side()
-{
-    m_king = 0;
-    m_queen = 0;
-    m_rooks = 0;
-    m_bishops = 0;
-    m_knights = 0;
-    m_pawns = 0;
-}
+unsigned long long perft(Board & board, int depth) {
 
-bitboard Side::getAllPieces()
-{
-    return (m_king | m_queen | m_rooks | m_bishops | m_knights | m_pawns);
+    if (depth <= 0)
+        return 1;
+
+    Moves moves;
+    moves.generateLegal(board);
+
+    if (depth == 1)
+        return static_cast<unsigned long long>(moves.size());
+
+    unsigned long long nodes = 0;
+
+    for (auto i = 0; i < moves.size(); ++i) {
+        Rewind undo;
+
+        board.doMove(moves[i], undo);
+        nodes += perft(board, depth - 1);
+        board.unmakeMove(moves[i], undo);
+    }
+
+    return nodes;
 }
 
 pasteque_namespace_end

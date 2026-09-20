@@ -19,52 +19,54 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef UCI_H
-#define UCI_H
-
-#include <string>
-#include <vector>
+#ifndef JUDGE_H
+#define JUDGE_H
 
 #include "pasteque.h"
+#include "bitboard.h"
 #include "board.h"
 
 pasteque_namespace_begin
 
-enum
+struct Taper
 {
-    DEFAULT_DEPTH = 6,
-    DEPTH_CEILING = 64
+    Taper() : opening{0}, closing{0} {}
+    Taper(int o, int c) : opening{o}, closing{c} {}
+
+    void operator+=(const Taper & other) { opening += other.opening; closing += other.closing; }
+    void operator-=(const Taper & other) { opening -= other.opening; closing -= other.closing; }
+
+    Taper operator-() const { return Taper(-opening, -closing); }
+
+    int opening,
+        closing;
 };
 
-class Uci
+enum
+{
+    EVEN_SCORE      = 0,
+    MATE_SCORE      = 32000,
+    HUGE_SCORE      = 32001,
+
+    PHASE_MAX       = 24,
+    TEMPO           = 14
+};
+
+extern Taper PIECE_SQUARE[16][64];
+
+class Judge
 {
 public:
-    Uci();
+    static void init();
+    static int evaluate(const Board & board);
 
 public:
-    int  handleCmdLine(int argc, char *argv[]);
-
-public:
-    void handleCommand(const std::string & line);
-
-    const Board & getBoard() const { return m_board; }
-    bool  departing() const { return m_departing; }
+    static Taper pieceSquare(const Board & board);
+    static int  phase(const Board & board);
 
 private:
-    void onUci();
-    void onQuit();
-    void onIsReady();
-    void onNewGame();
-    void onPosition(const std::vector<std::string> & tokens);
-    void onGo(const std::vector<std::string> & tokens);
-
-private:
-    bool playMove(const std::string & notation);
-
-private:
-    Board m_board;
-    bool  m_departing;
+    static int  scale(const Board & board, int eval);
 };
 
 pasteque_namespace_end
-#endif // UCI_H
+#endif // JUDGE_H

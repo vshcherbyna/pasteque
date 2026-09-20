@@ -20,19 +20,10 @@
 */
 
 #include "uci.h"
-#include "board.h"
-#include "moves.h"
 
 #if !defined(UNIT_TEST)
-int main(int argc, char *argv[])
-{
-    pasteque::Board board;
-    pasteque::Moves moves(board);
-
-    moves.allMoves();
-
+int main(int argc, char *argv[]) {
     pasteque::Uci handler;
-
     return handler.handleCmdLine(argc, argv);
 }
 #endif

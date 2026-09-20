@@ -19,52 +19,45 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef UCI_H
-#define UCI_H
-
-#include <string>
-#include <vector>
+#ifndef SEARCH_H
+#define SEARCH_H
 
 #include "pasteque.h"
 #include "board.h"
+#include "moves.h"
 
 pasteque_namespace_begin
 
 enum
 {
-    DEFAULT_DEPTH = 6,
-    DEPTH_CEILING = 64
+    PLY_LIMIT = 128
 };
 
-class Uci
+typedef void (*Watcher)(int depth, int score, unsigned long long nodes, unsigned long long msec, Move best);
+
+class Search
 {
 public:
-    Uci();
+    Search();
 
 public:
-    int  handleCmdLine(int argc, char *argv[]);
+    Move                bestMove(Board & board, int depth);
+    void                setWatcher(Watcher watcher) { m_watcher = watcher; }
 
 public:
-    void handleCommand(const std::string & line);
-
-    const Board & getBoard() const { return m_board; }
-    bool  departing() const { return m_departing; }
+    unsigned long long  getNodes() const { return m_nodes; }
+    int                 getScore() const { return m_score; }
 
 private:
-    void onUci();
-    void onQuit();
-    void onIsReady();
-    void onNewGame();
-    void onPosition(const std::vector<std::string> & tokens);
-    void onGo(const std::vector<std::string> & tokens);
+    int                 alphaBeta(Board & board, int alpha, int beta, int depth, int ply);
+    int                 quiescence(Board & board, int alpha, int beta, int ply);
+    void                order(Moves & moves);
 
 private:
-    bool playMove(const std::string & notation);
-
-private:
-    Board m_board;
-    bool  m_departing;
+    unsigned long long  m_nodes;
+    int                 m_score;
+    Watcher             m_watcher;
 };
 
 pasteque_namespace_end
-#endif // UCI_H
+#endif // SEARCH_H
