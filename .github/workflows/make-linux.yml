@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - '**'
-  workflow_dispatch:  # Allow manual triggering of the workflow
+  workflow_dispatch:
 
 jobs:
   build:
@@ -27,19 +27,11 @@ jobs:
         g++ --version | head -1
         make --version | head -1
 
-    # This is the command OpenBench itself runs: the first target, EXE overridden, no
-    # way to pass a define. If it stops working here, it stops working there.
     - name: Build with make
       run: make -j EXE=pasteque-ob
 
-    # The node count is a watermark. The same positions searched to the same depth have to
-    # produce the same tree on every compiler and every platform, so a mismatch here is
-    # either a search change that bench.nodes should have been updated for in the same
-    # commit, or a real portability bug. OpenBench relies on exactly this property.
     - name: Bench the engine
       run: |
         ./pasteque-ob bench | tee bench.txt
         tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
-        # tr, not cat: a windows runner may check bench.nodes out with a carriage return
-        # on the end of it, and the comparison would then fail for no reason at all.
         test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"

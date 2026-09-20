@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - '**'
-  workflow_dispatch:  # Allow manual triggering of the workflow
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,9 +23,6 @@ jobs:
         make --version | head -1
         uname -m
 
-    # g++ is a clang shim here and uname reports arm64, so the makefile takes its clang
-    # branch for link time optimisation and withholds the x86 -march entirely. Both of
-    # those decisions are only ever exercised on this runner.
     - name: Build with make
       run: make -j EXE=pasteque-ob
 
@@ -34,14 +31,8 @@ jobs:
         lipo -archs pasteque-ob
         test "$(lipo -archs pasteque-ob)" = "arm64"
 
-    # The node count is a watermark. The same positions searched to the same depth have to
-    # produce the same tree on every compiler and every platform, so a mismatch here is
-    # either a search change that bench.nodes should have been updated for in the same
-    # commit, or a real portability bug. OpenBench relies on exactly this property.
     - name: Bench the engine
       run: |
         ./pasteque-ob bench | tee bench.txt
         tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
-        # tr, not cat: a windows runner may check bench.nodes out with a carriage return
-        # on the end of it, and the comparison would then fail for no reason at all.
         test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"
