@@ -35,17 +35,31 @@ if (NOT MSVC)
     target_compile_options(pasteque PRIVATE -Wall -Werror)
 endif ()
 
-if (EXISTS ${PROJECT_SOURCE_DIR}/external/googletest/CMakeLists.txt)
-    add_subdirectory(external/googletest)
+# fetched by tag rather than carried as a submodule: the gitlink pinned a 2019 commit
+# that cmake 4 refuses to configure, and a gitlink is easy to lose when a change moves
+# between clones.
+
+option(PASTEQUE_UNIT_TESTS "Build the unit tests" ON)
+
+if (PASTEQUE_UNIT_TESTS)
+    include(FetchContent)
+
+    FetchContent_Declare(googletest
+        GIT_REPOSITORY  https://github.com/google/googletest.git
+        GIT_TAG         v1.18.0
+        GIT_SHALLOW     TRUE)
+
+    FetchContent_MakeAvailable(googletest)
+
     enable_testing()
-    include_directories(${googletest_SOURCE_DIR}/include ${googletest_SOURCE_DIR})
+
     FILE(GLOB UTSRCFILES ${PROJECT_SOURCE_DIR}/src/unit/*.cpp)
+
     add_executable(unit ${UTSRCFILES} ${SRCFILES} ${HDRFILES})
     target_link_libraries(unit gtest gtest_main)
     target_compile_definitions(unit PRIVATE UNIT_TEST)
+
     if (NOT MSVC)
         target_compile_options(unit PRIVATE -Wall -Werror)
     endif ()
-else ()
-    message(STATUS "external/googletest is empty, skipping unit tests")
 endif ()

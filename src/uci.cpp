@@ -29,6 +29,8 @@
 
 pasteque_namespace_begin
 
+static const char * ENGINE_NAME = "pasteque 0.0.0";
+
 static void tokenize(const std::string & line, std::vector<std::string> & tokens) {
     std::string token;
 
@@ -85,7 +87,7 @@ int Uci::handleCmdLine(int argc, char *argv[]) {
 
     std::cout.setf(std::ios::unitbuf);
 
-    onUci();
+    std::cout << ENGINE_NAME << " by Volodymyr Shcherbyna" << std::endl;
 
     while (!m_departing && std::getline(std::cin, line))
         handleCommand(line);
@@ -118,7 +120,7 @@ void Uci::handleCommand(const std::string & line) {
 }
 
 void Uci::onUci() {
-    std::cout << "id name pasteque 0.0.0" << std::endl;
+    std::cout << "id name " << ENGINE_NAME << std::endl;
     std::cout << "id author Volodymyr Shcherbyna" << std::endl;
     std::cout << "uciok" << std::endl;
 }

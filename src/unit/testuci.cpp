@@ -54,6 +54,37 @@ static bool mentions(const std::string & text, const std::string & needle)
     return text.find(needle) != std::string::npos;
 }
 
+//
+//  Runs the real startup path with a script standing in for the console, so what the
+//  engine says before it is spoken to is under test as well
+//
+
+static std::string converse(Uci & handler, const std::string & script)
+{
+    std::istringstream typed(script);
+    std::ostringstream captured;
+
+    auto spoken = std::cout.rdbuf(captured.rdbuf());
+    auto heard  = std::cin.rdbuf(typed.rdbuf());
+
+    handler.handleCmdLine(0, nullptr);
+
+    std::cin.rdbuf(heard);
+    std::cout.rdbuf(spoken);
+
+    return captured.str();
+}
+
+static size_t tally(const std::string & text, const std::string & needle)
+{
+    size_t total = 0;
+
+    for (auto at = text.find(needle); at != std::string::npos; at = text.find(needle, at + needle.size()))
+        ++total;
+
+    return total;
+}
+
 TEST(Uci_handshake, Positive)
 {
     Uci handler;
@@ -192,6 +223,28 @@ TEST(Uci_newGame, Positive)
     speak(handler, "ucinewgame");
 
     EXPECT_EQ(handler.getBoard().fen(), START_POSITION);
+}
+
+//
+//  A gui is entitled to hear nothing that looks like a handshake until it asks for one,
+//  and to hear it exactly once when it does
+//
+
+TEST(Uci_startupIsQuiet, Positive)
+{
+    Uci handler;
+
+    auto session = converse(handler, "quit\n");
+
+    EXPECT_EQ(tally(session, "uciok"), 0u);
+    EXPECT_TRUE(mentions(session, "pasteque"));
+}
+
+TEST(Uci_handshakeOnce, Positive)
+{
+    Uci handler;
+
+    EXPECT_EQ(tally(converse(handler, "uci\nquit\n"), "uciok"), 1u);
 }
 
 }
