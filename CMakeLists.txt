@@ -1,4 +1,6 @@
-cmake_minimum_required (VERSION 3.8)
+# 3.16 is what googletest itself asks for, and anything below 3.10 is already
+# deprecated by cmake 4, which is what the ci runners now ship.
+cmake_minimum_required (VERSION 3.16)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project (pasteque)
