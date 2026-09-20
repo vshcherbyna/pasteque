@@ -26,7 +26,7 @@
 
 pasteque_namespace_begin
 
-static const int ORDER_VALUES[8] = { 0, 3, 1, 0, 0, 3, 5, 9 };
+static const int ORDER_VALUES[8] = { 0, 1, 7, 6, 0, 10, 15, 9 };
 
 Search::Search() : m_nodes{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();

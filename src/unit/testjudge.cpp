@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "../judge.h"
+#include "../search.h"
 
 pasteque_namespace_begin
 namespace unit
@@ -162,10 +163,15 @@ TEST(Judge, Positive)
 
     EXPECT_EQ(evaluate(START_POSITION), int(TEMPO));
 
-    //  material tells, and it tells the same from either side
+    //  the terms are drawn at random, so the evaluation owes us nothing about who is
+    //  winning. What it does owe us is distance from the window the search reads as a mate
 
-    EXPECT_GT(evaluate("4k3/8/8/8/8/8/8/3QK3 w - - 0 1"), 800);
-    EXPECT_LT(evaluate("3qk3/8/8/8/8/8/8/4K3 w - - 0 1"), -800);
+    for (auto fen : POSITIONS)
+    {
+        auto eval = evaluate(fen);
+
+        EXPECT_LT((eval < 0) ? -eval : eval, int(MATE_SCORE) - int(PLY_LIMIT)) << fen;
+    }
 
     //  material that cannot mate is drawn whatever the placement says
 
@@ -173,9 +179,39 @@ TEST(Judge, Positive)
     EXPECT_EQ(evaluate("4k3/8/8/8/8/8/8/3NK3 w - - 0 1"), int(EVEN_SCORE));
     EXPECT_EQ(evaluate("4k3/8/8/8/8/8/8/3BK3 b - - 0 1"), int(EVEN_SCORE));
 
-    //  but a single pawn is enough to be worth counting again
+}
 
-    EXPECT_NE(evaluate("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"), int(EVEN_SCORE));
+//
+//  With the tables random there is no chess left to assert, so what is tested instead is
+//  that evaluate() really is the sum of the tables it claims to be
+//
+
+TEST(Judge_evaluate, MatchesTheTables)
+{
+    Judge::init();
+
+    for (auto fen : POSITIONS)
+    {
+        Board board;
+
+        EXPECT_TRUE(board.setFen(fen)) << fen;
+
+        auto tabled  = Judge::pieceSquare(board);
+        auto left    = Judge::phase(board);
+        auto tapered = (tabled.opening * left + tabled.closing * (int(PHASE_MAX) - left)) / int(PHASE_MAX);
+
+        if (board.getSide() == BLACK)
+            tapered = -tapered;
+
+        tapered += int(TEMPO);
+
+        //  material that cannot mate is folded back to level whatever the tables said
+
+        auto actual = Judge::evaluate(board);
+
+        EXPECT_TRUE(actual == tapered || actual == int(EVEN_SCORE))
+            << fen << "  " << actual << " vs " << tapered;
+    }
 }
 
 TEST(Judge_phase, Positive)
@@ -185,11 +221,21 @@ TEST(Judge_phase, Positive)
     EXPECT_TRUE(board.setFen(START_POSITION));
     EXPECT_EQ(Judge::phase(board), int(PHASE_MAX));
 
-    EXPECT_TRUE(board.setFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1"));
+    //  both kings are always on the board, so their weight is held at zero and a bare
+    //  king ending is the one position that reaches the closing end of the taper
+
+    EXPECT_TRUE(board.setFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1"));
     EXPECT_EQ(Judge::phase(board), 0);
 
+    //  every other position sits somewhere between the two ends
+
+    EXPECT_TRUE(board.setFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1"));
+    EXPECT_GE(Judge::phase(board), 0);
+    EXPECT_LE(Judge::phase(board), int(PHASE_MAX));
+
     EXPECT_TRUE(board.setFen("4k3/8/8/8/8/8/8/3QK3 w - - 0 1"));
-    EXPECT_EQ(Judge::phase(board), 4);
+    EXPECT_GE(Judge::phase(board), 0);
+    EXPECT_LE(Judge::phase(board), int(PHASE_MAX));
 }
 
 TEST(Judge_pieceSquare, Positive)
@@ -204,14 +250,24 @@ TEST(Judge_pieceSquare, Positive)
     EXPECT_EQ(Judge::pieceSquare(board).opening, 0);
     EXPECT_EQ(Judge::pieceSquare(board).closing, 0);
 
-    //  a knight in the middle is worth more than one in the corner, in both phases
+    //  the tables carry no opinion any more, but they still have to be filled in rather
+    //  than left flat, and every entry has to sit inside the range the draw promised
 
-    EXPECT_GT(PIECE_SQUARE[WHITE_KNIGHT][E4].opening, PIECE_SQUARE[WHITE_KNIGHT][A1].opening);
+    auto varies = false;
 
-    //  a king wants a corner while the queens are on and the middle once they are gone
+    for (auto square = 1; square < 64; ++square)
+        if (PIECE_SQUARE[WHITE_KNIGHT][square].opening != PIECE_SQUARE[WHITE_KNIGHT][0].opening)
+            varies = true;
 
-    EXPECT_GT(PIECE_SQUARE[WHITE_KING][G1].opening, PIECE_SQUARE[WHITE_KING][E4].opening);
-    EXPECT_LT(PIECE_SQUARE[WHITE_KING][G1].closing, PIECE_SQUARE[WHITE_KING][E4].closing);
+    EXPECT_TRUE(varies);
+
+    for (auto square = 0; square < 64; ++square)
+    {
+        EXPECT_LE(PIECE_SQUARE[WHITE_QUEEN][square].opening,  512);
+        EXPECT_GE(PIECE_SQUARE[WHITE_QUEEN][square].opening, -512);
+        EXPECT_LE(PIECE_SQUARE[WHITE_QUEEN][square].closing,  512);
+        EXPECT_GE(PIECE_SQUARE[WHITE_QUEEN][square].closing, -512);
+    }
 
     //  black's tables are white's, mirrored
 

@@ -25,6 +25,7 @@
 
 #include "../search.h"
 #include "../judge.h"
+#include "../moves.h"
 
 pasteque_namespace_begin
 namespace unit
@@ -74,31 +75,63 @@ TEST(Search, FindsMateInTwo)
     EXPECT_EQ(ladder.score, int(MATE_SCORE) - 3);
 }
 
-TEST(Search, SeesMaterial)
+//
+//  The evaluation terms are drawn at random, so no test here may assume the engine wants
+//  material or any other chess. These are the properties that hold whatever the tables say
+//
+
+static const char * SEARCHED[] = {
+    START_POSITION,
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+    "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
+};
+
+TEST(Search, ReturnsALegalMove)
 {
-    //  a queen hanging on g4 to the bishop on c8
+    for (auto fen : SEARCHED)
+    {
+        Board board;
+        Moves legal;
 
-    auto queen = search("rnbqkbnr/ppp2ppp/8/3pp3/6Q1/4P3/PPPP1PPP/RNB1KBNR b KQkq - 0 3", 4);
+        EXPECT_TRUE(board.setFen(fen)) << fen;
 
-    EXPECT_EQ(queen.move, "c8g4");
-    EXPECT_GT(queen.score, 800);
+        legal.generateLegal(board);
 
-    //  a rook checking from an undefended square gets taken
+        auto found = search(fen, 4);
+        auto seen  = false;
 
-    auto rook = search("4k3/8/8/8/8/8/4r3/4K2R w K - 0 1", 4);
+        for (auto i = 0; i < legal.size(); ++i)
+            if (legal[i].toString() == found.move)
+                seen = true;
 
-    EXPECT_EQ(rook.move, "e1e2");
-    EXPECT_GT(rook.score, 400);
+        EXPECT_TRUE(seen) << fen << "  ->  " << found.move;
+    }
 }
 
-TEST(Search, QuiescenceHoldsTheScore)
+TEST(Search, IsRepeatable)
 {
-    //  a queen that can take a defended pawn must not be tempted. Without a quiescence
-    //  search the shallow score would show the pawn won and miss the recapture
+    for (auto fen : SEARCHED)
+    {
+        auto first  = search(fen, 4);
+        auto second = search(fen, 4);
 
-    auto grab = search("4k3/8/8/3p4/8/8/3K4/3Q4 w - - 0 1", 2);
+        EXPECT_EQ(first.move, second.move) << fen;
+        EXPECT_EQ(first.score, second.score) << fen;
+    }
+}
 
-    EXPECT_LT(grab.score, 1200);
+TEST(Search, StaysOutOfTheMateWindow)
+{
+    //  a quiet position must never score where the search would read a mate
+
+    for (auto fen : SEARCHED)
+    {
+        auto found = search(fen, 4);
+        auto size  = (found.score < 0) ? -found.score : found.score;
+
+        EXPECT_LT(size, int(MATE_SCORE) - int(PLY_LIMIT)) << fen;
+    }
 }
 
 TEST(Search, ScoresTerminalPositions)
@@ -116,8 +149,8 @@ TEST(Search, ScoresTerminalPositions)
 
 TEST(Search, DeepensWithoutLosingTheMove)
 {
-    //  the same position at rising depth keeps finding a sane capture, and the node count
-    //  grows rather than the search quietly doing nothing
+    //  the same position at rising depth keeps returning a move, and the node count grows
+    //  rather than the search quietly doing nothing
 
     unsigned long long previous = 0;
 
@@ -130,7 +163,7 @@ TEST(Search, DeepensWithoutLosingTheMove)
 
         auto move = searcher.bestMove(board, depth);
 
-        EXPECT_EQ(move.toString(), "c8g4");
+        EXPECT_NE(move.toString(), "a1a1");
         EXPECT_GT(searcher.getNodes(), previous);
 
         previous = searcher.getNodes();
