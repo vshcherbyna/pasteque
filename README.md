@@ -6,11 +6,11 @@ Pastèque is a free UCI chess engine from Ukraine. It is not a complete chess pr
 
 # History
 
-The work on Pastèque was started in 2018, and it was never got to anything meaniningful mostly because I then switched to working on Igel. I recently found some sources on my hard drive and decided to resurrenct the project to let it least be released.
+The work on Pastèque was started in 2018, and it was never got to anything meaniningful mostly because I then switched to working on Igel. I recently found some old Pastèque sources on my hard drive and decided to resurrenct the project to let it least be released.
 
 ## Evaluation is stochastic on purpose
 
-All evaluation parameters — piece values, twelve piece-square tables, phase weights, the tempo bonus and the move-ordering values — are random on purpose. One can wonder - why use random numbers as a chess evaluation - the rational behind is to build an engine that is truly having zero chess knowledge.
+All evaluation parameters — piece values, twelve piece-square tables, phase weights, the tempo bonus and the move-ordering values — are random on purpose. One can wonder - why use random numbers as a chess evaluation - the rational behind is to build an engine that is truly having zero chess knowledge from start except the legal moves.
 
 ## Building
 
