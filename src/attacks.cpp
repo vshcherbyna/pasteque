@@ -136,14 +136,14 @@ static void initSliderKeys(SliderKey keys[64], bitboard table[], const int delta
 
 #else
 
-static bitboard s_randomSeed = 1070372;
+static bitboard s_randomSeed = 0x5041535445515545ULL;
 
 static bitboard random64() {
-    s_randomSeed ^= s_randomSeed >> 12;
-    s_randomSeed ^= s_randomSeed << 25;
-    s_randomSeed ^= s_randomSeed >> 27;
+    s_randomSeed ^= s_randomSeed << 13;
+    s_randomSeed ^= s_randomSeed >> 7;
+    s_randomSeed ^= s_randomSeed << 17;
 
-    return s_randomSeed * 2685821657736338717ULL;
+    return s_randomSeed * 0x7061737465717565ULL;
 }
 
 static bitboard sparseRandom() {
