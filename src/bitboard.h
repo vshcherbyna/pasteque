@@ -1,9 +1,7 @@
 /*
 *  pastèque - uci chess engine
 *
-*  Copyright (C) 2018 by Volodymyr M. Shcherbyna <volodymyr@shcherbyna.com>
-*
-*      This file is part of pastèque.
+*  Copyright (C) 2018-2026 Volodymyr Shcherbyna <volodymyr@shcherbyna.com>
 *
 *  pastèque is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -24,6 +22,10 @@
 
 #include <stdint.h>
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 #include "pasteque.h"
 
 pasteque_namespace_begin
@@ -39,7 +41,14 @@ enum
     A5, B5, C5, D5, E5, F5, G5, H5,
     A6, B6, C6, D6, E6, F6, G6, H6,
     A7, B7, C7, D7, E7, F7, G7, H7,
-    A8, B8, C8, D8, E8, F8, G8, H8
+    A8, B8, C8, D8, E8, F8, G8, H8,
+    NO_SQUARE
+};
+
+enum
+{
+    WHITE = 0,
+    BLACK = 1
 };
 
 enum
@@ -70,30 +79,60 @@ enum
     BLACK_KNIGHT    = BLACK_PIECE | KNIGHT, // 00001001  9
     BLACK_PAWN      = BLACK_PIECE | PAWN,   // 00001010 10
     BLACK_KING      = BLACK_PIECE | KING,   // 00001011 11
-    BLACK_ROOK      = BLACK_PIECE | ROOK,   // 00001101 13
+    BLACK_BISHOP    = BLACK_PIECE | BISHOP, // 00001101 13
+    BLACK_ROOK      = BLACK_PIECE | ROOK,   // 00001110 14
     BLACK_QUEEN     = BLACK_PIECE | QUEEN   // 00001111 15
 };
+
+enum
+{
+    WHITE_SHORT    = 1,
+    WHITE_LONG   = 2,
+    BLACK_SHORT    = 4,
+    BLACK_LONG   = 8
+};
+
+#define bit_of(square) (1ULL << (square))
 
 #define bit_set(number, bit) number |= 1ULL << bit
 #define bit_unset(number, bit) number &= (~(1ULL << bit))
 
-static int firstOne(bitboard bitmap)
-{
-    // De Bruijn Multiplication, see http://chessprogramming.wikispaces.com/BitScan
-    // don't use this if bitmap = 0
+#define piece_color(piece) (((piece) >> 3) & 1)
 
-    static const int INDEX64[64] = {
-    63,  0, 58,  1, 59, 47, 53,  2,
-    60, 39, 48, 27, 54, 33, 42,  3,
-    61, 51, 37, 40, 49, 18, 28, 20,
-    55, 30, 34, 11, 43, 14, 22,  4,
-    62, 57, 46, 52, 38, 26, 32, 41,
-    50, 36, 17, 19, 29, 10, 13, 21,
-    56, 45, 25, 31, 35, 16,  9, 12,
-    44, 24, 15,  8, 23,  7,  6,  5 };
+#define square_file(square) ((square) & 7)
+#define square_rank(square) ((square) >> 3)
+#define square_of(file, rank) (((rank) << 3) | (file))
 
-    static const uint64_t DEBRUIJN64 = 0x07EDD5E59A4E28C2;
-    return INDEX64[((bitmap & -bitmap) * DEBRUIJN64) >> 58];
+#define piece_of(type, color) ((type) | ((color) << 3))
+
+#define rank_mask(rank) (0xffULL << ((rank) << 3))
+#define file_mask(file) (0x0101010101010101ULL << (file))
+
+inline int firstOne(bitboard bitmap) {
+
+#if defined(_MSC_VER)
+    unsigned long index;
+    _BitScanForward64(&index, bitmap);
+    return static_cast<int>(index);
+#else
+    return __builtin_ctzll(bitmap);
+#endif
+}
+
+inline int popCount(bitboard bitmap) {
+#if defined(_MSC_VER)
+    return static_cast<int>(__popcnt64(bitmap));
+#else
+    return __builtin_popcountll(bitmap);
+#endif
+}
+
+inline int popFirstOne(bitboard & bitmap) {
+
+    auto square = firstOne(bitmap);
+    bitmap &= bitmap - 1;
+
+    return square;
 }
 
 pasteque_namespace_end

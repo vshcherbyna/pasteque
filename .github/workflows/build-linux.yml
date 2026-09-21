@@ -1,0 +1,51 @@
+name: Pasteque Linux Build with CMake
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install the toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++ cmake
+
+    - name: Configure CMake
+      run: cmake -S . -B local -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build the project
+      run: cmake --build local -j
+
+    - name: Run the unit tests
+      run: ./local/unit
+
+    - name: Smoke the engine
+      run: |
+        printf 'uci\nisready\nposition startpos moves e2e4 e7e5\ngo depth 6\nquit\n' | ./local/pasteque | tee smoke.txt
+        grep -q '^uciok$' smoke.txt
+        grep -q '^readyok$' smoke.txt
+        grep -q '^bestmove ' smoke.txt
+
+    - name: Bench the engine
+      run: |
+        ./local/pasteque bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"

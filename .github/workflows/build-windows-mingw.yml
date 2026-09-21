@@ -1,0 +1,56 @@
+name: Pasteque Windows Build MinGW
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up MSYS2 MINGW64
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+
+    - name: Configure CMake
+      run: cmake -S . -B local -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build the project
+      run: cmake --build local -j
+
+    - name: Run the unit tests
+      run: ./local/unit.exe
+
+    - name: Smoke the engine
+      run: |
+        printf 'uci\nisready\nposition startpos moves e2e4 e7e5\ngo depth 6\nquit\n' | ./local/pasteque.exe | tee smoke.txt
+        grep -q '^uciok$' smoke.txt
+        grep -q '^readyok$' smoke.txt
+        grep -q '^bestmove ' smoke.txt
+
+    - name: Bench the engine
+      run: |
+        ./local/pasteque.exe bench | tee bench.txt
+        tail -1 bench.txt | grep -Eq '^[0-9]+ nodes [0-9]+ nps$'
+        test "$(tail -1 bench.txt | cut -d' ' -f1)" = "$(tr -dc '0-9' < bench.nodes)"

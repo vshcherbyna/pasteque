@@ -1,9 +1,7 @@
 /*
 *  pastèque - uci chess engine
 *
-*  Copyright (C) 2018 by Volodymyr M. Shcherbyna <volodymyr@shcherbyna.com>
-*
-*      This file is part of pastèque.
+*  Copyright (C) 2018-2026 Volodymyr Shcherbyna <volodymyr@shcherbyna.com>
 *
 *  pastèque is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -22,29 +20,42 @@
 #ifndef MOVES_H
 #define MOVES_H
 
-#include <list>
-
 #include "pasteque.h"
 #include "move.h"
 #include "board.h"
 
 pasteque_namespace_begin
 
+enum
+{
+    MOVE_LIMIT = 256
+};
+
 class Moves
 {
-    using listOfMoves = std::list<Move>;
+public:
+    Moves() : m_size{0} {}
 
 public:
-    Moves(Board board);
+    void    generate(const Board & board);
+    void    generateLegal(const Board & board);
 
 public:
-    listOfMoves allMoves();
+    int     size() const { return m_size; }
+    Move    operator[](int index) const { return m_moves[index]; }
+    Move &  operator[](int index) { return m_moves[index]; }
 
 private:
-    listOfMoves moveKnights();
+    void    add(Move move) { m_moves[m_size++] = move; }
+    void    addPromotions(int from, int to, int piece, int capture);
+
+    void    generatePawns(const Board & board, unsigned char side, bitboard mask, bitboard checkers);
+    void    generatePieces(const Board & board, unsigned char side, unsigned char type, bitboard mask);
+    void    generateCastlings(const Board & board, unsigned char side);
 
 private:
-    Board m_board;
+    Move    m_moves[MOVE_LIMIT];
+    int     m_size;
 };
 
 pasteque_namespace_end

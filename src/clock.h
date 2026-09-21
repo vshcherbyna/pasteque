@@ -17,48 +17,48 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef UCI_H
-#define UCI_H
+#ifndef CLOCK_H
+#define CLOCK_H
 
+#include <chrono>
 #include <string>
 #include <vector>
 
 #include "pasteque.h"
-#include "board.h"
-#include "clock.h"
 
 pasteque_namespace_begin
 
-class Uci
+typedef std::chrono::steady_clock::time_point Instant;
+
+enum
+{
+    DEFAULT_DEPTH       = 6,
+    DEPTH_CEILING       = 64,
+    MOVE_OVERHEAD       = 30,
+    SUDDEN_DEATH_MOVES  = 30,
+    HARD_MULTIPLIER     = 3
+};
+
+class Clock
 {
 public:
-    Uci();
+    Clock();
+    Clock(unsigned int soft, unsigned int hard, int depth);
+    Clock(const std::vector<std::string> & tokens, unsigned char side);
 
 public:
-    int  handleCmdLine(int argc, char *argv[]);
-
-public:
-    void handleCommand(const std::string & line);
-
-    const Board & getBoard() const { return m_board; }
-    bool  departing() const { return m_departing; }
+    unsigned int    getSoft() const { return m_soft; }
+    unsigned int    getHard() const { return m_hard; }
+    int             getDepth() const { return m_depth; }
+    bool            isEndless() const { return m_endless; }
 
 private:
-    void onUci();
-    void onQuit();
-    void onIsReady();
-    void onNewGame();
-    void onPosition(const std::vector<std::string> & tokens);
-    void onGo(const std::vector<std::string> & tokens);
-    void onBench(const std::vector<std::string> & tokens);
+    unsigned int    m_soft,
+                    m_hard;
 
-private:
-    bool playMove(const std::string & notation);
-
-private:
-    Board m_board;
-    bool  m_departing;
+    int             m_depth;
+    bool            m_endless;
 };
 
 pasteque_namespace_end
-#endif // UCI_H
+#endif // CLOCK_H

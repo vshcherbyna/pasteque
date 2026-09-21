@@ -17,8 +17,21 @@
 *  along with pastèque.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "bitboard.h"
+#ifndef BENCH_H
+#define BENCH_H
+
+#include "pasteque.h"
 
 pasteque_namespace_begin
 
+enum
+{
+    BENCH_DEPTH = 5
+};
+
+int          bench(int depth);
+int          benchCount();
+const char * benchPosition(int index);
+
 pasteque_namespace_end
+#endif // BENCH_H
