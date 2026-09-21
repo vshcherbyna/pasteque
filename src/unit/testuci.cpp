@@ -83,14 +83,27 @@ static size_t tally(const std::string & text, const std::string & needle)
     return total;
 }
 
+static bool plainAscii(const std::string & text) {
+
+    for (auto character : text) {
+        if (static_cast<unsigned char>(character) < 0x80)
+            continue;
+
+        return false;
+    }
+
+    return true;
+}
+
 TEST(Uci_handshake, Positive)
 {
     Uci handler;
 
     auto greeting = speak(handler, "uci");
 
-    EXPECT_TRUE(mentions(greeting, "id name Past\xC3\xA8" "que 0.0.0 64"));
-    EXPECT_TRUE(mentions(greeting, "id author V. Shcherbyna (2018 - 2026)"));
+    EXPECT_TRUE(mentions(greeting, "id name Pasteque 0.0.0 64"));
+    EXPECT_TRUE(mentions(greeting, "id author Volodymyr Shcherbyna (2018-2026)"));
+    EXPECT_TRUE(plainAscii(greeting));
     EXPECT_TRUE(mentions(greeting, "uciok"));
 
     //  the name of the other engine used to be here
@@ -235,7 +248,8 @@ TEST(Uci_startupIsQuiet, Positive)
     auto session = converse(handler, "quit\n");
 
     EXPECT_EQ(tally(session, "uciok"), 0u);
-    EXPECT_TRUE(mentions(session, "Past\xC3\xA8" "que"));
+    EXPECT_TRUE(mentions(session, "Pasteque"));
+    EXPECT_TRUE(plainAscii(session));
 }
 
 TEST(Uci_handshakeOnce, Positive)
