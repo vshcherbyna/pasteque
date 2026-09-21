@@ -1,6 +1,6 @@
 # Overview
 
-![Logo](https://raw.githubusercontent.com/vshcherbyna/pasteque/refs/heads/foundations/pasteque.png?token=GHSAT0AAAAAAD7FJG6OG43H7K24PZKWWPXA2VQQYJA)
+![Logo]https://raw.githubusercontent.com/vshcherbyna/pasteque/refs/heads/foundations/pasteque.png?token=GHSAT0AAAAAAD7FJG6OKRL4CIPPBHT746NS2VQQ2KA)
 
 Pastèque is a free UCI chess engine from Ukraine. It is not a complete chess program: it needs a UCI-compatible GUI to be used.
 
