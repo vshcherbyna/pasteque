@@ -89,8 +89,8 @@ TEST(Uci_handshake, Positive)
 
     auto greeting = speak(handler, "uci");
 
-    EXPECT_TRUE(mentions(greeting, "id name pasteque"));
-    EXPECT_TRUE(mentions(greeting, "id author"));
+    EXPECT_TRUE(mentions(greeting, "id name Past\xC3\xA8" "que 0.0.0 64"));
+    EXPECT_TRUE(mentions(greeting, "id author V. Shcherbyna (2018 - 2026)"));
     EXPECT_TRUE(mentions(greeting, "uciok"));
 
     //  the name of the other engine used to be here
@@ -235,7 +235,7 @@ TEST(Uci_startupIsQuiet, Positive)
     auto session = converse(handler, "quit\n");
 
     EXPECT_EQ(tally(session, "uciok"), 0u);
-    EXPECT_TRUE(mentions(session, "pasteque"));
+    EXPECT_TRUE(mentions(session, "Past\xC3\xA8" "que"));
 }
 
 TEST(Uci_handshakeOnce, Positive)

@@ -25,10 +25,24 @@
 #include "moves.h"
 #include "search.h"
 #include "judge.h"
+#include "attacks.h"
 
 pasteque_namespace_begin
 
-static const char * ENGINE_NAME = "pasteque 0.0.0";
+static_assert(sizeof(void *) == 8, "the engine is 64 bit only");
+
+static const char * ENGINE_NAME    = "Pastèque";
+static const char * ENGINE_VERSION = "0.0.0";
+static const char * ENGINE_AUTHOR  = "V. Shcherbyna (2018 - 2026)";
+
+static const char * ENGINE_ARCH =
+#if defined(PASTEQUE_PEXT)
+    "64 BMI2";
+#elif defined(__x86_64__) || defined(_M_X64)
+    "64 POPCNT";
+#else
+    "64";
+#endif
 
 static void tokenize(const std::string & line, std::vector<std::string> & tokens) {
     std::string token;
@@ -87,7 +101,7 @@ int Uci::handleCmdLine(int argc, char *argv[]) {
     if (argc > 1 && std::string(argv[1]) == "bench")
         return bench(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(BENCH_DEPTH));
 
-    std::cout << ENGINE_NAME << " by Volodymyr Shcherbyna" << std::endl;
+    std::cout << ENGINE_NAME << " " << ENGINE_VERSION << " " << ENGINE_ARCH << " by " << ENGINE_AUTHOR << std::endl;
 
     while (!m_departing && std::getline(std::cin, line))
         handleCommand(line);
@@ -126,8 +140,8 @@ void Uci::onBench(const std::vector<std::string> & tokens) {
 }
 
 void Uci::onUci() {
-    std::cout << "id name " << ENGINE_NAME << std::endl;
-    std::cout << "id author Volodymyr Shcherbyna" << std::endl;
+    std::cout << "id name " << ENGINE_NAME << " " << ENGINE_VERSION << " " << ENGINE_ARCH << std::endl;
+    std::cout << "id author " << ENGINE_AUTHOR << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
