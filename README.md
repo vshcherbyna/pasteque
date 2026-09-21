@@ -1,6 +1,6 @@
 # Overview
 
-![Logo](pasteque.png)
+<img src="pasteque.png" alt="Logo" width="200">
 
 Pastèque is a free UCI chess engine from Ukraine. It is not a complete chess program: it needs a UCI-compatible GUI to be used.
 
@@ -12,7 +12,7 @@ Work on Pastèque started in 2018, and it never amounted to much — mainly beca
 
 All evaluation parameters — piece values, twelve piece-square tables, phase weights, the tempo bonus and the move-ordering values — are random on purpose.
 
-It is a fair question why an engine would judge a position with random numbers. The reason is to start from an engine that knows nothing about chess beyond the legal moves: nothing tells it that a queen outweighs a pawn, or where a knight belongs. Whatever it ends up knowing, it will have to be taught by tuning.
+It is a fair question why an engine would judge a position with random numbers. The reason is to start from an engine that knows nothing about chess beyond the legal moves.
 
 # Building
 
