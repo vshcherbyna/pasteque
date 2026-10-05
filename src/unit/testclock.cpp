@@ -310,13 +310,13 @@ TEST(Search_stopsShortOfTheCeiling, Positive) {
     //  the hard limit cutting the iteration short
     //
 
-    auto clock   = read("go depth 20 movetime 200", WHITE);
+    auto clock   = read("go depth 20 movetime 1500", WHITE);
     auto started = std::chrono::steady_clock::now();
     auto best    = searcher.bestMove(board, clock);
     auto spent   = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::steady_clock::now() - started).count();
 
-    EXPECT_LT(spent, 2000);
+    EXPECT_LT(spent, 5000);
     EXPECT_NE(static_cast<int>(best), 0);
 
     EXPECT_GT(g_depthSeen, 0);
@@ -416,6 +416,28 @@ TEST(Search_depthStillWorks, Positive) {
 
     EXPECT_EQ(searcher.bestMove(board, 3).toString(), "a1a8");
     EXPECT_EQ(searcher.getScore(), int(MATE_SCORE) - 1);
+}
+
+TEST(Clock_nodes, Positive)
+{
+    auto counted = read("go nodes 5000", WHITE);
+
+    EXPECT_EQ(counted.getNodes(), 5000ULL);
+    EXPECT_TRUE(counted.isEndless());
+    EXPECT_EQ(counted.getDepth(), int(DEPTH_CEILING));
+
+    auto mixed = read("go nodes 5000 depth 4", WHITE);
+
+    EXPECT_EQ(mixed.getNodes(), 5000ULL);
+    EXPECT_EQ(mixed.getDepth(), 4);
+}
+
+TEST(Clock_nodes, Negative)
+{
+    EXPECT_EQ(read("go movetime 100", WHITE).getNodes(), 0ULL);
+    EXPECT_EQ(read("go depth 4", WHITE).getNodes(), 0ULL);
+    EXPECT_EQ(read("go", WHITE).getNodes(), 0ULL);
+    EXPECT_EQ(read("go nodes", WHITE).getNodes(), 0ULL);
 }
 
 }

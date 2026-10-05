@@ -61,7 +61,9 @@ private:
     void                pollClock();
 
 private:
-    unsigned long long  m_nodes;
+    unsigned long long  m_nodes,
+                        m_quota;
+
     int                 m_score;
     Watcher             m_watcher;
 

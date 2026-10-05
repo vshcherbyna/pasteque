@@ -22,6 +22,8 @@
 
 #include "uci.h"
 #include "bench.h"
+#include "openings.h"
+#include "learn.h"
 #include "moves.h"
 #include "search.h"
 #include "judge.h"
@@ -32,7 +34,7 @@ pasteque_namespace_begin
 static_assert(sizeof(void *) == 8, "the engine is 64 bit only");
 
 static const char * ENGINE_NAME    = "Pasteque";
-static const char * ENGINE_VERSION = "0.0.1";
+static const char * ENGINE_VERSION = "0.0.2";
 static const char * ENGINE_AUTHOR  = "Volodymyr Shcherbyna (2018-2026)";
 
 static const char * ENGINE_ARCH =
@@ -100,6 +102,16 @@ int Uci::handleCmdLine(int argc, char *argv[]) {
 
     if (argc > 1 && std::string(argv[1]) == "bench")
         return bench(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(BENCH_DEPTH));
+
+    if (argc > 1 && std::string(argv[1]) == "learn")
+        return learn(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(LEARN_GAMES),
+                     argc > 3 ? std::atoi(argv[3]) : static_cast<int>(LEARN_NODES),
+                     argc > 4 ? std::strtoull(argv[4], nullptr, 10) : 0);
+
+    if (argc > 1 && std::string(argv[1]) == "openings")
+        return openings(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(OPENINGS_COUNT),
+                        argc > 3 ? std::atoi(argv[3]) : static_cast<int>(OPENINGS_PLIES),
+                        argc > 4 ? std::strtoull(argv[4], nullptr, 10) : 0);
 
     std::cout << ENGINE_NAME << " " << ENGINE_VERSION << " " << ENGINE_ARCH << " by " << ENGINE_AUTHOR << std::endl;
 

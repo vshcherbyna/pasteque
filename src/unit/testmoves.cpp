@@ -29,8 +29,7 @@ pasteque_namespace_begin
 namespace unit
 {
 
-static int countGenerated(const char * fen)
-{
+static int countGenerated(const char * fen) {
     Board board;
     Moves moves;
 
@@ -40,8 +39,7 @@ static int countGenerated(const char * fen)
     return moves.size();
 }
 
-static int countLegal(const char * fen)
-{
+static int countLegal(const char * fen) {
     Board board;
     Moves moves;
 
@@ -57,8 +55,7 @@ static int countLegal(const char * fen)
 //  playing the move and looking - and that is the path perft already vouches for
 //
 
-static bool agreesWithMakeAndTest(Board & board, int depth)
-{
+static bool agreesWithMakeAndTest(Board & board, int depth) {
     Moves legal, pseudo;
 
     legal.generateLegal(board);
@@ -103,8 +100,7 @@ static bool agreesWithMakeAndTest(Board & board, int depth)
     return true;
 }
 
-static bool generatedLegal(const char * fen, const std::string & lan)
-{
+static bool generatedLegal(const char * fen, const std::string & lan) {
     Board board;
     Moves moves;
 
@@ -118,8 +114,7 @@ static bool generatedLegal(const char * fen, const std::string & lan)
     return false;
 }
 
-static bool generated(const char * fen, const std::string & lan)
-{
+static bool generated(const char * fen, const std::string & lan) {
     Board board;
     Moves moves;
 
