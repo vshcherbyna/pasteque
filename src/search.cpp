@@ -84,11 +84,19 @@ int Search::quiescence(Board & board, int alpha, int beta, int ply) {
     if (m_aborted)
         return 0;
 
+    if (ply > 0 && board.recurred(ply))
+        return EVEN_SCORE;
+
     if (ply >= PLY_LIMIT)
         return Judge::evaluate(board);
 
     auto checked = board.getCheckers() != 0;
-    auto best    = -static_cast<int>(HUGE_SCORE);
+    auto expired = ply > 0 && board.getFifty() >= 100;
+
+    if (expired && !checked)
+        return EVEN_SCORE;
+
+    auto best = -static_cast<int>(HUGE_SCORE);
 
     if (!checked) {
         best = Judge::evaluate(board);
@@ -105,6 +113,9 @@ int Search::quiescence(Board & board, int alpha, int beta, int ply) {
 
     if (!moves.size())
         return checked ? -MATE_SCORE + ply : EVEN_SCORE;
+
+    if (expired)
+        return EVEN_SCORE;
 
     order(moves);
 
@@ -139,6 +150,9 @@ int Search::quiescence(Board & board, int alpha, int beta, int ply) {
 
 int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
 
+    if (ply > 0 && board.recurred(ply))
+        return EVEN_SCORE;
+
     if (depth <= 0)
         return quiescence(board, alpha, beta, ply);
 
@@ -148,14 +162,14 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (m_aborted)
         return 0;
 
-    if (ply > 0 && board.getFifty() >= 100)
-        return EVEN_SCORE;
-
     Moves moves;
     moves.generateLegal(board);
 
     if (!moves.size())
         return board.getCheckers() ? -MATE_SCORE + ply : EVEN_SCORE;
+
+    if (ply > 0 && board.getFifty() >= 100)
+        return EVEN_SCORE;
 
     order(moves);
 

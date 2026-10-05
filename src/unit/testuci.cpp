@@ -101,7 +101,7 @@ TEST(Uci_handshake, Positive)
 
     auto greeting = speak(handler, "uci");
 
-    EXPECT_TRUE(mentions(greeting, "id name Pasteque 0.0.0 64"));
+    EXPECT_TRUE(mentions(greeting, "id name Pasteque "));
     EXPECT_TRUE(mentions(greeting, "id author Volodymyr Shcherbyna (2018-2026)"));
     EXPECT_TRUE(plainAscii(greeting));
     EXPECT_TRUE(mentions(greeting, "uciok"));

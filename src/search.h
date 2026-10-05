@@ -49,7 +49,11 @@ public:
     unsigned long long  getNodes() const { return m_nodes; }
     int                 getScore() const { return m_score; }
 
+#if defined(UNIT_TEST)
+public:
+#else
 private:
+#endif
     Move                deepen(Board & board, int depth, Instant started, unsigned int soft);
     int                 alphaBeta(Board & board, int alpha, int beta, int depth, int ply);
     int                 quiescence(Board & board, int alpha, int beta, int ply);

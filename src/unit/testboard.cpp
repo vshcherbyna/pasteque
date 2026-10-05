@@ -19,14 +19,16 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "../board.h"
+#include "../moves.h"
 
 pasteque_namespace_begin
 namespace unit
 {
 
-TEST(Board, Positive)
-{
+TEST(Board, Positive) {
     Board b{};
 
     EXPECT_EQ(b.fen(), START_POSITION);
@@ -43,8 +45,7 @@ TEST(Board, Positive)
     EXPECT_EQ(b.getPiece(E4), EMPTY);
 }
 
-TEST(Board_clear, Positive)
-{
+TEST(Board_clear, Positive) {
     Board b{};
 
     b.clear();
@@ -53,8 +54,7 @@ TEST(Board_clear, Positive)
     EXPECT_EQ(b.fen(), "8/8/8/8/8/8/8/8 w - - 0 1");
 }
 
-TEST(Board_setFen, Positive)
-{
+TEST(Board_setFen, Positive) {
     static const char * FENS[] = {
         START_POSITION,
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
@@ -63,8 +63,7 @@ TEST(Board_setFen, Positive)
         "4k3/8/8/8/8/8/8/4K3 b - - 99 175"
     };
 
-    for (auto fen : FENS)
-    {
+    for (auto fen : FENS) {
         Board b{};
 
         EXPECT_TRUE(b.setFen(fen));
@@ -72,8 +71,7 @@ TEST(Board_setFen, Positive)
     }
 }
 
-TEST(Board_setFen, Negative)
-{
+TEST(Board_setFen, Negative) {
     static const char * FENS[] = {
         "",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
@@ -85,16 +83,14 @@ TEST(Board_setFen, Negative)
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq j9 0 1"
     };
 
-    for (auto fen : FENS)
-    {
+    for (auto fen : FENS) {
         Board b{};
 
         EXPECT_FALSE(b.setFen(fen));
     }
 }
 
-TEST(Board_setFen, Occupancy)
-{
+TEST(Board_setFen, Occupancy) {
     Board b{};
 
     EXPECT_TRUE(b.setFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"));
@@ -102,8 +98,7 @@ TEST(Board_setFen, Occupancy)
     bitboard white = 0,
              black = 0;
 
-    for (auto square = 0; square < 64; ++square)
-    {
+    for (auto square = 0; square < 64; ++square) {
         auto piece = b.getPiece(square);
 
         if (piece == EMPTY)
@@ -120,6 +115,312 @@ TEST(Board_setFen, Occupancy)
     EXPECT_EQ(b.getAllPieces(WHITE), white);
     EXPECT_EQ(b.getAllPieces(BLACK), black);
     EXPECT_EQ(b.getAllPieces(), white | black);
+}
+
+static bool play(Board & board, const char * notation) {
+    Moves  moves;
+    Rewind undo;
+
+    moves.generateLegal(board);
+
+    for (auto i = 0; i < moves.size(); ++i) {
+        if (moves[i].toString() != notation)
+            continue;
+
+        board.doMove(moves[i], undo);
+
+        return true;
+    }
+
+    return false;
+}
+
+static Move find(Board & board, const char * notation) {
+    Moves moves;
+
+    moves.generateLegal(board);
+
+    for (auto i = 0; i < moves.size(); ++i)
+        if (moves[i].toString() == notation)
+            return moves[i];
+
+    return Move();
+}
+
+static const char * MOVE_FENS[] = {
+    START_POSITION,
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq - 0 1",
+    "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
+    "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3",
+    "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N w - - 0 1",
+    "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1",
+    "r3k2r/6B1/8/8/8/8/8/R3K2R w KQkq - 0 1",
+    "r3k2r/8/8/8/8/8/6b1/R3K2R b KQkq - 0 1"
+};
+
+TEST(Board_stamp, MatchesFreshParseAfterEveryMove) {
+    for (auto fen : MOVE_FENS) {
+        Board b{};
+
+        ASSERT_TRUE(b.setFen(fen)) << fen;
+
+        Moves moves;
+        moves.generateLegal(b);
+
+        ASSERT_NE(moves.size(), 0) << fen;
+
+        for (auto i = 0; i < moves.size(); ++i) {
+            Rewind undo;
+
+            b.doMove(moves[i], undo);
+
+            Board parsed{};
+
+            ASSERT_TRUE(parsed.setFen(b.fen())) << fen << " " << moves[i].toString();
+            EXPECT_EQ(b.getStamp(), parsed.getStamp()) << fen << " " << moves[i].toString();
+
+            b.unmakeMove(moves[i], undo);
+        }
+    }
+}
+
+TEST(Board_stamp, SurvivesUnmake) {
+    for (auto fen : MOVE_FENS) {
+        Board b{};
+
+        EXPECT_TRUE(b.setFen(fen)) << fen;
+
+        auto before = b.getStamp();
+
+        EXPECT_NE(before, 0ULL) << fen;
+
+        Moves moves;
+        moves.generateLegal(b);
+
+        for (auto i = 0; i < moves.size(); ++i) {
+            Rewind undo;
+
+            b.doMove(moves[i], undo);
+
+            EXPECT_NE(b.getStamp(), before) << fen << " " << moves[i].toString();
+
+            b.unmakeMove(moves[i], undo);
+
+            EXPECT_EQ(b.getStamp(), before) << fen << " " << moves[i].toString();
+            EXPECT_EQ(b.fen(), std::string(fen)) << fen;
+        }
+    }
+}
+
+TEST(Board_stamp, IgnoresMoveOrder) {
+    Board first{},
+          second{};
+
+    EXPECT_TRUE(play(first, "g1f3"));
+    EXPECT_TRUE(play(first, "g8f6"));
+    EXPECT_TRUE(play(first, "b1c3"));
+    EXPECT_TRUE(play(first, "b8c6"));
+
+    EXPECT_TRUE(play(second, "b1c3"));
+    EXPECT_TRUE(play(second, "b8c6"));
+    EXPECT_TRUE(play(second, "g1f3"));
+    EXPECT_TRUE(play(second, "g8f6"));
+
+    EXPECT_EQ(first.fen(), second.fen());
+    EXPECT_EQ(first.getStamp(), second.getStamp());
+}
+
+TEST(Board_stamp, MatchesSetFen) {
+    static const char * MOVES[] = { "e2e4", "c7c5", "g1f3", "d7d6", "f1b5", "c8d7", "e1g1" };
+
+    Board played{};
+
+    for (auto notation : MOVES) {
+        EXPECT_TRUE(play(played, notation)) << notation;
+
+        Board parsed{};
+
+        EXPECT_TRUE(parsed.setFen(played.fen())) << notation;
+        EXPECT_EQ(parsed.getStamp(), played.getStamp()) << notation;
+    }
+}
+
+TEST(Board_stamp, IgnoresUncapturableEnPassant) {
+    Board b{};
+
+    EXPECT_TRUE(b.setFen("4k1n1/8/8/8/8/8/4P3/4K1N1 w - - 0 1"));
+    EXPECT_TRUE(play(b, "e2e4"));
+
+    auto pushed = b.getStamp();
+
+    EXPECT_TRUE(play(b, "g8f6"));
+    EXPECT_TRUE(play(b, "g1f3"));
+    EXPECT_TRUE(play(b, "f6g8"));
+    EXPECT_TRUE(play(b, "f3g1"));
+
+    EXPECT_EQ(b.getStamp(), pushed);
+    EXPECT_TRUE(b.recurred(5));
+}
+
+TEST(Board_stamp, IgnoresPinnedEnPassant) {
+    Board offered{},
+          spent{};
+
+    EXPECT_TRUE(offered.setFen("k3r3/8/8/3pP3/8/8/8/4K3 w - d6 0 2"));
+    EXPECT_TRUE(spent.setFen("k3r3/8/8/3pP3/8/8/8/4K3 w - - 0 2"));
+
+    Moves moves;
+    moves.generateLegal(offered);
+
+    for (auto i = 0; i < moves.size(); ++i)
+        EXPECT_NE(moves[i].toString(), "e5d6");
+
+    EXPECT_EQ(offered.getStamp(), spent.getStamp());
+}
+
+TEST(Board_stamp, IgnoresCheckedEnPassant) {
+    Board offered{},
+          spent{};
+
+    EXPECT_TRUE(offered.setFen("k7/8/8/3pP3/8/6n1/8/7K w - d6 0 2"));
+    EXPECT_TRUE(spent.setFen("k7/8/8/3pP3/8/6n1/8/7K w - - 0 2"));
+
+    Moves moves;
+    moves.generateLegal(offered);
+
+    for (auto i = 0; i < moves.size(); ++i)
+        EXPECT_NE(moves[i].toString(), "e5d6");
+
+    EXPECT_EQ(offered.getStamp(), spent.getStamp());
+}
+
+TEST(Board_stamp, KeepsCheckBreakingEnPassant) {
+    Board offered{},
+          spent{};
+
+    EXPECT_TRUE(offered.setFen("k7/8/8/3pP3/4K3/8/8/8 w - d6 0 2"));
+    EXPECT_TRUE(spent.setFen("k7/8/8/3pP3/4K3/8/8/8 w - - 0 2"));
+
+    Moves moves;
+    moves.generateLegal(offered);
+
+    auto found = false;
+
+    for (auto i = 0; i < moves.size(); ++i)
+        if (moves[i].toString() == "e5d6")
+            found = true;
+
+    EXPECT_TRUE(found);
+    EXPECT_NE(offered.getStamp(), spent.getStamp());
+}
+
+TEST(Board_stamp, KeepsCapturableEnPassant) {
+    Board offered{},
+          spent{};
+
+    EXPECT_TRUE(offered.setFen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2"));
+    EXPECT_TRUE(spent.setFen("4k3/8/8/3pP3/8/8/8/4K3 w - - 0 2"));
+
+    EXPECT_NE(offered.getStamp(), spent.getStamp());
+}
+
+static void shuffle(Board & board) {
+    EXPECT_TRUE(play(board, "g1f3"));
+    EXPECT_TRUE(play(board, "g8f6"));
+    EXPECT_TRUE(play(board, "f3g1"));
+    EXPECT_TRUE(play(board, "f6g8"));
+}
+
+TEST(Board_recurred, ThreefoldAtRoot) {
+    Board b{};
+
+    shuffle(b);
+
+    EXPECT_EQ(b.fen(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4 3");
+    EXPECT_FALSE(b.recurred(0));
+
+    shuffle(b);
+
+    EXPECT_TRUE(b.recurred(0));
+}
+
+TEST(Board_recurred, TwofoldAfterRoot) {
+    Board b{};
+
+    shuffle(b);
+
+    EXPECT_FALSE(b.recurred(4));
+    EXPECT_TRUE(b.recurred(5));
+}
+
+TEST(Board_recurred, Negative) {
+    Board b{};
+
+    EXPECT_FALSE(b.recurred(0));
+
+    EXPECT_TRUE(play(b, "g1f3"));
+    EXPECT_FALSE(b.recurred(0));
+
+    EXPECT_TRUE(play(b, "g8f6"));
+    EXPECT_FALSE(b.recurred(0));
+
+    EXPECT_TRUE(play(b, "f3g1"));
+    EXPECT_FALSE(b.recurred(0));
+}
+
+TEST(Board_recurred, ForgetsBeforePawnMove) {
+    Board b{};
+
+    shuffle(b);
+    shuffle(b);
+
+    EXPECT_TRUE(b.recurred(0));
+
+    EXPECT_TRUE(play(b, "e2e4"));
+
+    EXPECT_FALSE(b.recurred(0));
+}
+
+TEST(Board_recurred, SurvivesExploredIrreversibleMove) {
+    Board b{};
+
+    shuffle(b);
+    shuffle(b);
+
+    EXPECT_TRUE(b.recurred(0));
+
+    auto fen   = b.fen();
+    auto stamp = b.getStamp();
+
+    auto push = find(b, "e2e4");
+    ASSERT_NE(static_cast<int>(push), 0);
+
+    Rewind onPush;
+    b.doMove(push, onPush);
+
+    auto reply = find(b, "g8f6");
+    ASSERT_NE(static_cast<int>(reply), 0);
+
+    Rewind onReply;
+    b.doMove(reply, onReply);
+
+    b.unmakeMove(reply, onReply);
+    b.unmakeMove(push, onPush);
+
+    EXPECT_EQ(b.fen(), fen);
+    EXPECT_EQ(b.getStamp(), stamp);
+    EXPECT_TRUE(b.recurred(0));
+}
+
+TEST(Board_setFen, RejectsMissingKings) {
+    Board b{};
+
+    EXPECT_FALSE(b.setFen("8/8/8/8/8/8/8/8 w - a3 0 1"));
+    EXPECT_FALSE(b.setFen("8/8/8/3pP3/8/8/8/8 w - d6 0 1"));
+    EXPECT_FALSE(b.setFen("4k3/8/8/8/8/8/8/8 w - - 0 1"));
+    EXPECT_FALSE(b.setFen("4k3/8/8/8/8/8/8/3KK3 w - - 0 1"));
 }
 
 }

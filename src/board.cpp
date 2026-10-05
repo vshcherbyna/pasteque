@@ -88,9 +88,46 @@ static void initCastlingMask() {
     CASTLING_MASK[H8] = static_cast<unsigned char>(~BLACK_SHORT);
 }
 
+static stamp STAMP_PIECE[16][64];
+static stamp STAMP_CASTLING[16];
+static stamp STAMP_ENPASSANT[8];
+static stamp STAMP_SIDE;
+
+static stamp nextStamp(stamp & seed) {
+    seed ^= seed >> 12;
+    seed ^= seed << 25;
+    seed ^= seed >> 27;
+
+    return seed * 0x2545f4914f6cdd1dULL;
+}
+
+static void initStamps() {
+    static auto initialised = false;
+
+    if (initialised)
+        return;
+
+    initialised = true;
+
+    stamp seed = 0x9e3779b97f4a7c15ULL;
+
+    for (auto piece = 0; piece < 16; ++piece)
+        for (auto square = 0; square < 64; ++square)
+            STAMP_PIECE[piece][square] = nextStamp(seed);
+
+    for (auto rights = 0; rights < 16; ++rights)
+        STAMP_CASTLING[rights] = nextStamp(seed);
+
+    for (auto file = 0; file < 8; ++file)
+        STAMP_ENPASSANT[file] = nextStamp(seed);
+
+    STAMP_SIDE = nextStamp(seed);
+}
+
 Board::Board() {
     initAttacks();
     initCastlingMask();
+    initStamps();
 
     setInitial();
 }
@@ -106,6 +143,9 @@ void Board::clear() {
 
     m_halfMoves  = 0;
     m_moveNumber = 1;
+
+    m_stamp    = 0;
+    m_trailPly = 0;
 }
 
 void Board::setInitial() {
@@ -117,6 +157,7 @@ void Board::putPiece(int square, unsigned char piece) {
     bit_set(m_allPieces[piece_color(piece)], square);
 
     m_squares[square] = piece;
+    m_stamp ^= STAMP_PIECE[piece][square];
 }
 
 void Board::removePiece(int square) {
@@ -126,6 +167,38 @@ void Board::removePiece(int square) {
     bit_unset(m_allPieces[piece_color(piece)], square);
 
     m_squares[square] = EMPTY;
+    m_stamp ^= STAMP_PIECE[piece][square];
+}
+
+bool Board::passantUsable() const {
+    auto opponent = static_cast<unsigned char>(m_side ^ 1);
+    auto takers   = PAWN_ATTACKS[opponent][m_enPassant] & m_pieces[piece_of(PAWN, m_side)];
+
+    if (!takers)
+        return false;
+
+    auto king     = getKing(m_side);
+    auto captured = square_of(square_file(m_enPassant), square_rank(m_enPassant) + ((m_side == WHITE) ? -1 : 1));
+
+    //
+    //  Taking en passant moves two pawns and lands on a third square, so it can only ever
+    //  break or block a slider. A knight, a king or any other pawn already checking stays
+    //  checking, and no taker can be legal
+    //
+
+    if ((KNIGHT_ATTACKS[king] & m_pieces[piece_of(KNIGHT, opponent)])
+     || (KING_ATTACKS[king] & m_pieces[piece_of(KING, opponent)])
+     || (PAWN_ATTACKS[m_side][king] & (m_pieces[piece_of(PAWN, opponent)] ^ bit_of(captured))))
+        return false;
+
+    while (takers) {
+        auto from = static_cast<unsigned int>(popFirstOne(takers));
+
+        if (legal(Move(from, m_enPassant, piece_of(PAWN, m_side), piece_of(PAWN, opponent), 0, MOVE_ENPASSANT), 0, king))
+            return true;
+    }
+
+    return false;
 }
 
 void Board::movePiece(int from, int to) {
@@ -137,6 +210,8 @@ void Board::movePiece(int from, int to) {
 
     m_squares[from] = EMPTY;
     m_squares[to]   = piece;
+
+    m_stamp ^= STAMP_PIECE[piece][from] ^ STAMP_PIECE[piece][to];
 }
 
 bool Board::setFen(const std::string & fen) {
@@ -166,6 +241,9 @@ bool Board::setFen(const std::string & fen) {
     }
 
     if (square != H1 + 1)
+        return false;
+
+    if (popCount(m_pieces[WHITE_KING]) != 1 || popCount(m_pieces[BLACK_KING]) != 1)
         return false;
 
     p = skipSpaces(p);
@@ -213,6 +291,14 @@ bool Board::setFen(const std::string & fen) {
 
     p = readNumber(skipSpaces(p), m_halfMoves);
     readNumber(skipSpaces(p), m_moveNumber);
+
+    m_stamp ^= STAMP_CASTLING[m_rights];
+
+    if (m_enPassant != NO_SQUARE && passantUsable())
+        m_stamp ^= STAMP_ENPASSANT[square_file(m_enPassant)];
+
+    if (m_side == BLACK)
+        m_stamp ^= STAMP_SIDE;
 
     return true;
 }
@@ -332,6 +418,13 @@ void Board::doMove(Move move, Rewind & undo) {
     undo.m_enPassant = m_enPassant;
     undo.m_halfMoves = m_halfMoves;
     undo.m_captured  = EMPTY;
+    undo.m_stamp    = m_stamp;
+    undo.m_trailPly = m_trailPly;
+
+    m_trail[m_trailPly++ & (TRAIL_LIMIT - 1)] = m_stamp;
+
+    if (m_enPassant != NO_SQUARE && passantUsable())
+        m_stamp ^= STAMP_ENPASSANT[square_file(m_enPassant)];
 
     m_enPassant = NO_SQUARE;
     ++m_halfMoves;
@@ -379,6 +472,11 @@ void Board::doMove(Move move, Rewind & undo) {
     m_rights &= CASTLING_MASK[from] & CASTLING_MASK[to];
     m_side = opponent;
 
+    m_stamp ^= STAMP_CASTLING[undo.m_rights] ^ STAMP_CASTLING[m_rights] ^ STAMP_SIDE;
+
+    if (m_enPassant != NO_SQUARE && passantUsable())
+        m_stamp ^= STAMP_ENPASSANT[square_file(m_enPassant)];
+
     if (side == BLACK)
         ++m_moveNumber;
 }
@@ -416,6 +514,9 @@ void Board::unmakeMove(Move move, const Rewind & undo) {
     m_rights    = undo.m_rights;
     m_enPassant = undo.m_enPassant;
     m_halfMoves = undo.m_halfMoves;
+
+    m_stamp    = undo.m_stamp;
+    m_trailPly = undo.m_trailPly;
 }
 
 bitboard Board::getCheckers() const {
@@ -479,6 +580,29 @@ bool Board::legal(Move move, bitboard pinned, int king) const {
     }
 
     return !(pinned & bit_of(from)) || (LINE[king][from] & bit_of(to));
+}
+
+bool Board::recurred(int ply) const {
+    auto back = static_cast<int>(m_halfMoves);
+
+    if (back > m_trailPly)
+        back = m_trailPly;
+
+    if (back > TRAIL_LIMIT)
+        back = TRAIL_LIMIT;
+
+    auto root  = m_trailPly - ply;
+    auto found = 0;
+
+    for (auto i = m_trailPly - 2; i >= m_trailPly - back; i -= 2) {
+        if (m_trail[i & (TRAIL_LIMIT - 1)] != m_stamp)
+            continue;
+
+        if (i > root || ++found == 2)
+            return true;
+    }
+
+    return false;
 }
 
 pasteque_namespace_end

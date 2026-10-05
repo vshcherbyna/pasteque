@@ -32,7 +32,7 @@ pasteque_namespace_begin
 static_assert(sizeof(void *) == 8, "the engine is 64 bit only");
 
 static const char * ENGINE_NAME    = "Pasteque";
-static const char * ENGINE_VERSION = "0.0.0";
+static const char * ENGINE_VERSION = "0.0.1";
 static const char * ENGINE_AUTHOR  = "Volodymyr Shcherbyna (2018-2026)";
 
 static const char * ENGINE_ARCH =
