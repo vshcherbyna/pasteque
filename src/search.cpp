@@ -24,7 +24,13 @@
 
 pasteque_namespace_begin
 
-static const int ORDER_VALUES[8] = { 0, 1, 7, 6, 0, 10, 15, 9 };
+//
+//  The fitted piece values divided by ten. The king is not among them - it cancels between the
+//  sides, so the fit cannot see it - and it takes the dearest attacker's value, because any
+//  other attacker is preferable when one is available
+//
+
+static const int ORDER_VALUES[8] = { 0, 14, 10, 33, 0, 18, 30, 33 };
 
 Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();
