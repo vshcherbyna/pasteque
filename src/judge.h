@@ -47,7 +47,7 @@ enum
     HUGE_SCORE      = 32001,
 
     PHASE_MAX       = 36,
-    TEMPO           = 95
+    TEMPO           = -12
 };
 
 extern Taper PIECE_SQUARE[16][64];

@@ -28,8 +28,7 @@ pasteque_namespace_begin
 namespace unit
 {
 
-static unsigned long long nodes(const char * fen, int depth)
-{
+static unsigned long long nodes(const char * fen, int depth) {
     Board board;
 
     EXPECT_TRUE(board.setFen(fen));

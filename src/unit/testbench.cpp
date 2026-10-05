@@ -31,8 +31,7 @@ pasteque_namespace_begin
 namespace unit
 {
 
-static std::string run(int depth)
-{
+static std::string run(int depth) {
     std::ostringstream captured;
 
     auto previous = std::cout.rdbuf(captured.rdbuf());
@@ -44,8 +43,7 @@ static std::string run(int depth)
     return captured.str();
 }
 
-static size_t tally(const std::string & text, const std::string & needle)
-{
+static size_t tally(const std::string & text, const std::string & needle) {
     size_t total = 0;
 
     for (auto at = text.find(needle); at != std::string::npos; at = text.find(needle, at + needle.size()))
@@ -54,8 +52,7 @@ static size_t tally(const std::string & text, const std::string & needle)
     return total;
 }
 
-static std::string lastLine(const std::string & text)
-{
+static std::string lastLine(const std::string & text) {
     auto end = text.find_last_not_of("\r\n");
 
     if (end == std::string::npos)

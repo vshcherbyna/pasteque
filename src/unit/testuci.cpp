@@ -34,8 +34,7 @@ namespace unit
 //  layer is under test without a console on either end
 //
 
-static std::string speak(Uci & handler, const std::string & line)
-{
+static std::string speak(Uci & handler, const std::string & line) {
     std::ostringstream captured;
 
     auto previous = std::cout.rdbuf(captured.rdbuf());
@@ -47,8 +46,7 @@ static std::string speak(Uci & handler, const std::string & line)
     return captured.str();
 }
 
-static bool mentions(const std::string & text, const std::string & needle)
-{
+static bool mentions(const std::string & text, const std::string & needle) {
     return text.find(needle) != std::string::npos;
 }
 
@@ -57,8 +55,7 @@ static bool mentions(const std::string & text, const std::string & needle)
 //  engine says before it is spoken to is under test as well
 //
 
-static std::string converse(Uci & handler, const std::string & script)
-{
+static std::string converse(Uci & handler, const std::string & script) {
     std::istringstream typed(script);
     std::ostringstream captured;
 
@@ -73,8 +70,7 @@ static std::string converse(Uci & handler, const std::string & script)
     return captured.str();
 }
 
-static size_t tally(const std::string & text, const std::string & needle)
-{
+static size_t tally(const std::string & text, const std::string & needle) {
     size_t total = 0;
 
     for (auto at = text.find(needle); at != std::string::npos; at = text.find(needle, at + needle.size()))

@@ -47,17 +47,20 @@ public:
     Clock(const std::vector<std::string> & tokens, unsigned char side);
 
 public:
-    unsigned int    getSoft() const { return m_soft; }
-    unsigned int    getHard() const { return m_hard; }
-    int             getDepth() const { return m_depth; }
-    bool            isEndless() const { return m_endless; }
+    unsigned int        getSoft() const { return m_soft; }
+    unsigned int        getHard() const { return m_hard; }
+    int                 getDepth() const { return m_depth; }
+    unsigned long long  getNodes() const { return m_nodes; }
+    bool                isEndless() const { return m_endless; }
 
 private:
-    unsigned int    m_soft,
-                    m_hard;
+    unsigned int        m_soft,
+                        m_hard;
 
-    int             m_depth;
-    bool            m_endless;
+    unsigned long long  m_nodes;
+
+    int                 m_depth;
+    bool                m_endless;
 };
 
 pasteque_namespace_end

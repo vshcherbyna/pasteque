@@ -44,11 +44,11 @@ static unsigned int trim(unsigned long long want, unsigned int pool) {
     return want ? static_cast<unsigned int>(want) : 1;
 }
 
-Clock::Clock() : m_soft{0}, m_hard{0}, m_depth{DEPTH_CEILING}, m_endless{true} {
+Clock::Clock() : m_soft{0}, m_hard{0}, m_nodes{0}, m_depth{DEPTH_CEILING}, m_endless{true} {
 }
 
 Clock::Clock(unsigned int soft, unsigned int hard, int depth)
-    : m_soft{soft}, m_hard{hard}, m_depth{depth}, m_endless{false} {
+    : m_soft{soft}, m_hard{hard}, m_nodes{0}, m_depth{depth}, m_endless{false} {
 }
 
 Clock::Clock(const std::vector<std::string> & tokens, unsigned char side) : Clock() {
@@ -83,6 +83,10 @@ Clock::Clock(const std::vector<std::string> & tokens, unsigned char side) : Cloc
             fixed     = number(value);
             haveFixed = true;
             bounded   = true;
+        }
+        else if (name == "nodes") {
+            m_nodes = std::strtoull(value.c_str(), nullptr, 10);
+            bounded = true;
         }
         else if (name == "depth") {
             m_depth = std::atoi(value.c_str());

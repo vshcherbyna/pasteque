@@ -82,6 +82,31 @@ TEST(Search, MateOutranksTheFiftyMoveRule) {
     EXPECT_EQ(deeper.score, int(MATE_SCORE) - 1);
 }
 
+TEST(Search, StopsAtNodeQuota)
+{
+    Board  board;
+    Search searcher;
+
+    Clock counted({ "go", "nodes", "5000" }, board.getSide());
+
+    ASSERT_EQ(counted.getNodes(), 5000ULL);
+
+    searcher.bestMove(board, counted);
+
+    EXPECT_EQ(searcher.getNodes(), 5000ULL);
+}
+
+TEST(Search, DepthSearchIgnoresTheQuota)
+{
+    Board  board;
+    Search searcher;
+
+    searcher.bestMove(board, 4);
+
+    EXPECT_NE(searcher.getNodes(), 5000ULL);
+    EXPECT_NE(searcher.getNodes(), 0ULL);
+}
+
 TEST(Search, QuiescenceScoresRepetitionAsDraw) {
     static const char * SHUFFLE[] = { "g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8" };
 

@@ -46,8 +46,7 @@ static const char * POSITIONS[] = {
 //  in case, side to move and castling rights swapped, ep square reflected
 //
 
-static std::string mirror(const std::string & fen)
-{
+static std::string mirror(const std::string & fen) {
     std::vector<std::string> fields;
     std::string field;
 
@@ -122,8 +121,7 @@ static std::string mirror(const std::string & fen)
     return result;
 }
 
-static int evaluate(const std::string & fen)
-{
+static int evaluate(const std::string & fen) {
     Board board;
 
     EXPECT_TRUE(board.setFen(fen)) << fen;
@@ -248,19 +246,15 @@ TEST(Judge_pieceSquare, Positive)
     EXPECT_EQ(Judge::pieceSquare(board).opening, 0);
     EXPECT_EQ(Judge::pieceSquare(board).closing, 0);
 
-    //  the tables carry no opinion any more, but they still have to be filled in rather
-    //  than left flat, and every entry has to sit inside the range the draw promised
-
-    auto varies = false;
-
-    for (auto square = 1; square < 64; ++square)
-        if (PIECE_SQUARE[WHITE_KNIGHT][square].opening != PIECE_SQUARE[WHITE_KNIGHT][0].opening)
-            varies = true;
-
-    EXPECT_TRUE(varies);
+    //
+    //  Only material is fitted so far, so every square of a piece carries the same number.
+    //  The squares stay flat until they are fitted in their own right
+    //
 
     for (auto square = 0; square < 64; ++square)
     {
+        EXPECT_EQ(PIECE_SQUARE[WHITE_KNIGHT][square].opening, PIECE_SQUARE[WHITE_KNIGHT][0].opening);
+        EXPECT_EQ(PIECE_SQUARE[WHITE_KNIGHT][square].closing, PIECE_SQUARE[WHITE_KNIGHT][0].closing);
         EXPECT_LE(PIECE_SQUARE[WHITE_QUEEN][square].opening,  512);
         EXPECT_GE(PIECE_SQUARE[WHITE_QUEEN][square].opening, -512);
         EXPECT_LE(PIECE_SQUARE[WHITE_QUEEN][square].closing,  512);

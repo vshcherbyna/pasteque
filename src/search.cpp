@@ -26,7 +26,7 @@ pasteque_namespace_begin
 
 static const int ORDER_VALUES[8] = { 0, 1, 7, 6, 0, 10, 15, 9 };
 
-Search::Search() : m_nodes{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
+Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();
 }
 
@@ -65,6 +65,9 @@ void Search::order(Moves & moves) {
 
 void Search::pollClock() {
 
+    if (m_quota && m_nodes >= m_quota)
+        m_aborted = true;
+
     if (m_timed && std::chrono::steady_clock::now() >= m_deadline)
         m_aborted = true;
 }
@@ -78,7 +81,7 @@ static unsigned long long spentMs(Instant started) {
 
 int Search::quiescence(Board & board, int alpha, int beta, int ply) {
 
-    if ((++m_nodes & POLL_MASK) == 0)
+    if ((++m_nodes & POLL_MASK) == 0 || m_nodes == m_quota)
         pollClock();
 
     if (m_aborted)
@@ -131,6 +134,9 @@ int Search::quiescence(Board & board, int alpha, int beta, int ply) {
         auto score = -quiescence(board, -beta, -alpha, ply + 1);
         board.unmakeMove(move, undo);
 
+        if (m_aborted)
+            return 0;
+
         if (score <= best)
             continue;
 
@@ -156,7 +162,7 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (depth <= 0)
         return quiescence(board, alpha, beta, ply);
 
-    if ((++m_nodes & POLL_MASK) == 0)
+    if ((++m_nodes & POLL_MASK) == 0 || m_nodes == m_quota)
         pollClock();
 
     if (m_aborted)
@@ -183,6 +189,9 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
         auto score = -alphaBeta(board, -beta, -alpha, depth - 1, ply + 1);
         board.unmakeMove(moves[i], undo);
 
+        if (m_aborted)
+            return 0;
+
         if (score <= best)
             continue;
 
@@ -203,6 +212,7 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
 Move Search::bestMove(Board & board, int depth) {
 
     m_timed   = false;
+    m_quota   = 0;
     m_aborted = false;
 
     return deepen(board, depth, std::chrono::steady_clock::now(), 0);
@@ -213,6 +223,7 @@ Move Search::bestMove(Board & board, const Clock & clock) {
     auto started = std::chrono::steady_clock::now();
 
     m_timed   = !clock.isEndless();
+    m_quota   = clock.getNodes();
     m_aborted = false;
 
     if (m_timed)
