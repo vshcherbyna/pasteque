@@ -31,6 +31,7 @@
 pasteque_namespace_begin
 
 typedef unsigned long long bitboard;
+typedef unsigned long long stamp;
 
 enum
 {

@@ -30,13 +30,22 @@ pasteque_namespace_begin
 
 #define START_POSITION "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+enum
+{
+    TRAIL_LIMIT = 512
+};
+
 struct Rewind
 {
+    stamp           m_stamp;
+
     unsigned char   m_rights,
                     m_enPassant,
                     m_captured;
 
     unsigned int    m_halfMoves;
+
+    int             m_trailPly;
 };
 
 class Board
@@ -62,6 +71,7 @@ public:
     unsigned char   getEp() const { return m_enPassant; }
     unsigned int    getFifty() const { return m_halfMoves; }
     unsigned int    getMoveNumber() const { return m_moveNumber; }
+    stamp           getStamp() const { return m_stamp; }
     int             getKing(unsigned char color) const { return firstOne(m_pieces[piece_of(KING, color)]); }
 
 public:
@@ -77,11 +87,13 @@ public:
     bitboard        getCheckers() const;
     bitboard        getPinned(unsigned char side) const;
     bool            legal(Move move, bitboard pinned, int king) const;
+    bool            recurred(int ply) const;
 
 private:
     void            putPiece(int square, unsigned char piece);
     void            removePiece(int square);
     void            movePiece(int from, int to);
+    bool            passantUsable() const;
 
 private:
     bitboard        m_pieces[16],
@@ -95,6 +107,11 @@ private:
 
     unsigned int    m_halfMoves,
                     m_moveNumber;
+
+    stamp           m_stamp,
+                    m_trail[TRAIL_LIMIT];
+
+    int             m_trailPly;
 };
 
 pasteque_namespace_end
