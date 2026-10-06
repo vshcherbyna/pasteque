@@ -24,13 +24,25 @@
 
 pasteque_namespace_begin
 
+enum
+{
+    ORDER_CAPTURE   = 100000,
+    ORDER_PROMOTION = 200000,
+    ORDER_VICTIM    = 16
+};
+
 //
-//  The fitted piece values divided by ten. The king is not among them - it cancels between the
-//  sides, so the fit cannot see it - and it takes the dearest attacker's value, because any
-//  other attacker is preferable when one is available
+//  The fitted piece values. The king is not among them - it cancels between the sides, so the
+//  fit cannot see it - and it takes the dearest attacker's value, because any other attacker is
+//  preferable when one is available
+//
+//  ORDER_VICTIM has to exceed the spread between the dearest and the cheapest attacker divided
+//  by the smallest gap between two neighbouring victims, or a cheap piece taking a lesser victim
+//  outranks an expensive one taking a greater. The offsets keep the three classes apart whatever
+//  the values grow to
 //
 
-static const int ORDER_VALUES[8] = { 0, 14, 10, 33, 0, 18, 30, 33 };
+static const int ORDER_VALUES[8] = { 0, 221, 100, 956, 0, 289, 411, 956 };
 
 Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();
@@ -45,10 +57,10 @@ void Search::order(Moves & moves) {
         auto score = 0;
 
         if (move.getCapture() != EMPTY)
-            score = 1000 + 10 * ORDER_VALUES[move.getCapture() & 7] - ORDER_VALUES[move.getPiece() & 7];
+            score = ORDER_CAPTURE + ORDER_VICTIM * ORDER_VALUES[move.getCapture() & 7] - ORDER_VALUES[move.getPiece() & 7];
 
         if (move.getPromotion())
-            score += 2000 + ORDER_VALUES[move.getPromotion() & 7];
+            score += ORDER_PROMOTION + ORDER_VALUES[move.getPromotion() & 7];
 
         scores[i] = score;
     }

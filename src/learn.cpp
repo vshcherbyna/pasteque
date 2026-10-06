@@ -22,8 +22,10 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <atomic>
 #include <map>
 #include <string>
+#include <thread>
 
 #include "learn.h"
 #include "openings.h"
@@ -100,7 +102,62 @@ static Census census(const Board & board) {
     return counts;
 }
 
-void learnRows(std::vector<LearnRow> & rows, int games, int nodes, unsigned long long seed) {
+static void playOut(const std::string & opening, const Clock & clock, Search & searcher,
+                    std::map<Census, Harvest> & basket) {
+
+    Board board;
+
+    if (!board.setFen(opening))
+        return;
+
+    std::vector<Sample> samples;
+
+    auto result = 0;
+    auto ended  = false;
+
+    for (auto ply = 0; ply < static_cast<int>(LEARN_LIMIT); ++ply) {
+        if (concluded(board, result)) {
+            ended = true;
+            break;
+        }
+
+        auto best = searcher.bestMove(board, clock);
+
+        if (static_cast<int>(best) == 0)
+            break;
+
+        if (!board.getCheckers() && best.getCapture() == EMPTY && !best.getPromotion() && !starved(board))
+            samples.push_back({ census(board), board.getSide() });
+
+        Rewind undo;
+
+        board.doMove(best, undo);
+    }
+
+    if (!ended)
+        return;
+
+    if (samples.size() > static_cast<size_t>(LEARN_KEEP)) {
+        std::vector<Sample> thinned;
+
+        auto stride = static_cast<double>(samples.size()) / LEARN_KEEP;
+
+        for (auto i = 0; i < static_cast<int>(LEARN_KEEP); ++i)
+            thinned.push_back(samples[static_cast<size_t>(i * stride)]);
+
+        samples.swap(thinned);
+    }
+
+    for (const auto & sample : samples) {
+        auto   mine = (sample.side == WHITE) ? result : -result;
+        auto & cell = basket[sample.census];
+
+        cell.score += mine + 1;
+        cell.seen  += 1;
+    }
+}
+
+void learnRows(std::vector<LearnRow> & rows, int games, int nodes, unsigned long long seed, int threads) {
 
     if (games < 1)
         games = LEARN_GAMES;
@@ -108,73 +165,77 @@ void learnRows(std::vector<LearnRow> & rows, int games, int nodes, unsigned long
     if (nodes < 1)
         nodes = LEARN_NODES;
 
+    if (threads < 1) {
+        threads = static_cast<int>(std::thread::hardware_concurrency());
+
+        if (threads < 1)
+            threads = 1;
+    }
+
+    if (threads > static_cast<int>(LEARN_THREADS))
+        threads = LEARN_THREADS;
+
     std::vector<std::string> openings;
 
     openingPositions(openings, games, OPENINGS_PLIES, seed);
 
+    //
+    //  The one-time tables guard themselves with a plain bool, which is not safe to race on,
+    //  so every one of them has to be built before the first thread starts. Generating the
+    //  openings has already built the board's; the evaluation's is asked for here
+    //
+
+    Judge::init();
+
+    //
+    //  A game depends on nothing but its opening, and the counts are only ever summed, so the
+    //  rows come out identical whatever the thread count. Only the wall clock changes
+    //
+
+    std::vector<std::map<Census, Harvest>> shares(static_cast<size_t>(threads));
+
+    std::atomic<size_t> next{0},
+                        done{0};
+
+    auto note = (games >= 20) ? static_cast<size_t>(games / 20) : static_cast<size_t>(games);
+
+    auto labour = [&](std::map<Census, Harvest> & basket) {
+        Clock  clock({ "go", "nodes", std::to_string(nodes) }, WHITE);
+        Search searcher;
+
+        for (;;) {
+            auto index = next++;
+
+            if (index >= openings.size())
+                return;
+
+            playOut(openings[index], clock, searcher, basket);
+
+            auto far = ++done;
+
+            if (note && (far % note) == 0)
+                std::cerr << ("learn: " + std::to_string(far) + " of "
+                              + std::to_string(openings.size()) + " games\n");
+        }
+    };
+
+    std::vector<std::thread> hands;
+
+    for (auto & basket : shares)
+        hands.push_back(std::thread(labour, std::ref(basket)));
+
+    for (auto & hand : hands)
+        hand.join();
+
     std::map<Census, Harvest> tally;
 
-    Clock  clock({ "go", "nodes", std::to_string(nodes) }, WHITE);
-    Search searcher;
+    for (const auto & basket : shares)
+        for (const auto & entry : basket) {
+            auto & cell = tally[entry.first];
 
-    auto note = (games >= 20) ? games / 20 : games;
-
-    for (size_t game = 0; game < openings.size(); ++game) {
-        Board board;
-
-        if (!board.setFen(openings[game]))
-            continue;
-
-        std::vector<Sample> samples;
-
-        auto result = 0;
-        auto ended  = false;
-
-        for (auto ply = 0; ply < static_cast<int>(LEARN_LIMIT); ++ply) {
-            if (concluded(board, result)) {
-                ended = true;
-                break;
-            }
-
-            auto best = searcher.bestMove(board, clock);
-
-            if (static_cast<int>(best) == 0)
-                break;
-
-            if (!board.getCheckers() && best.getCapture() == EMPTY && !best.getPromotion() && !starved(board))
-                samples.push_back({ census(board), board.getSide() });
-
-            Rewind undo;
-
-            board.doMove(best, undo);
+            cell.score += entry.second.score;
+            cell.seen  += entry.second.seen;
         }
-
-        if (!ended)
-            continue;
-
-        if (samples.size() > static_cast<size_t>(LEARN_KEEP)) {
-            std::vector<Sample> thinned;
-
-            auto stride = static_cast<double>(samples.size()) / LEARN_KEEP;
-
-            for (auto i = 0; i < static_cast<int>(LEARN_KEEP); ++i)
-                thinned.push_back(samples[static_cast<size_t>(i * stride)]);
-
-            samples.swap(thinned);
-        }
-
-        for (const auto & sample : samples) {
-            auto   mine = (sample.side == WHITE) ? result : -result;
-            auto & cell = tally[sample.census];
-
-            cell.score += mine + 1;
-            cell.seen  += 1;
-        }
-
-        if (note && ((game + 1) % static_cast<size_t>(note)) == 0)
-            std::cerr << "learn: " << (game + 1) << " of " << openings.size()
-                      << " games, " << tally.size() << " distinct" << std::endl;
-    }
 
     rows.clear();
 
@@ -278,11 +339,11 @@ bool learnFit(const std::vector<LearnRow> & rows, double values[6]) {
     return true;
 }
 
-int learn(int games, int nodes, unsigned long long seed) {
+int learn(int games, int nodes, unsigned long long seed, int threads) {
 
     std::vector<LearnRow> rows;
 
-    learnRows(rows, games, nodes, seed);
+    learnRows(rows, games, nodes, seed, threads);
 
     double raw[6];
 

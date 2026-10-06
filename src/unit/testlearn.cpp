@@ -77,8 +77,8 @@ TEST(Learn_rows, Deterministic) {
     std::vector<LearnRow> first,
                           second;
 
-    learnRows(first, 6, 600, 4242);
-    learnRows(second, 6, 600, 4242);
+    learnRows(first, 6, 600, 4242, 1);
+    learnRows(second, 6, 600, 4242, 1);
 
     ASSERT_FALSE(first.empty());
     ASSERT_EQ(first.size(), second.size());
@@ -93,10 +93,35 @@ TEST(Learn_rows, Deterministic) {
     }
 }
 
+TEST(Learn_rows, ThreadCountDoesNotChangeTheRows) {
+
+    //
+    //  A game depends on nothing but its opening and the counts are only summed, so more
+    //  threads may only make the run shorter, never different
+    //
+
+    std::vector<LearnRow> alone,
+                          crowd;
+
+    learnRows(alone, 24, 600, 909, 1);
+    learnRows(crowd, 24, 600, 909, 4);
+
+    ASSERT_FALSE(alone.empty());
+    ASSERT_EQ(alone.size(), crowd.size());
+
+    for (size_t i = 0; i < alone.size(); ++i) {
+        for (auto k = 0; k < 5; ++k)
+            EXPECT_EQ(alone[i].material[k], crowd[i].material[k]) << "row " << i;
+
+        EXPECT_EQ(alone[i].score, crowd[i].score) << "row " << i;
+        EXPECT_EQ(alone[i].seen, crowd[i].seen) << "row " << i;
+    }
+}
+
 TEST(Learn_rows, Sane) {
     std::vector<LearnRow> rows;
 
-    learnRows(rows, 8, 600, 77);
+    learnRows(rows, 8, 600, 77, 1);
 
     ASSERT_FALSE(rows.empty());
 
