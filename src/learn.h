@@ -28,11 +28,12 @@ pasteque_namespace_begin
 
 enum
 {
-    LEARN_GAMES  = 1000,
-    LEARN_NODES  = 5000,
-    LEARN_KEEP   = 20,
-    LEARN_LIMIT  = 600,
-    LEARN_ROUNDS = 40
+    LEARN_GAMES   = 1000,
+    LEARN_NODES   = 5000,
+    LEARN_KEEP    = 20,
+    LEARN_LIMIT   = 600,
+    LEARN_ROUNDS  = 40,
+    LEARN_THREADS = 256
 };
 
 struct LearnRow
@@ -43,9 +44,9 @@ struct LearnRow
                 seen;
 };
 
-void learnRows(std::vector<LearnRow> & rows, int games, int nodes, unsigned long long seed);
+void learnRows(std::vector<LearnRow> & rows, int games, int nodes, unsigned long long seed, int threads);
 bool learnFit(const std::vector<LearnRow> & rows, double values[6]);
-int  learn(int games, int nodes, unsigned long long seed);
+int  learn(int games, int nodes, unsigned long long seed, int threads);
 
 pasteque_namespace_end
 #endif // LEARN_H

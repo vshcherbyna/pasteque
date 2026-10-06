@@ -308,6 +308,27 @@ TEST(Search_order, VictimThenAttacker) {
     EXPECT_EQ(moves[2].toString(), "d4c5");
 }
 
+TEST(Search_order, BishopOutranksKnight) {
+
+    //
+    //  Taking the bishop with the queen has to beat taking the knight with a pawn. The fitted
+    //  knight and bishop sit closer together than any other neighbouring pair, so this is where
+    //  the ordering gives out first
+    //
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("7k/8/8/2nb4/1P6/8/8/3Q2K1 w - - 0 1"));
+
+    moves.generateLegal(board);
+    searcher.order(moves);
+
+    EXPECT_EQ(moves[0].toString(), "d1d5");
+    EXPECT_EQ(moves[1].toString(), "b4c5");
+}
+
 TEST(Search_order, QueenOutranksRook) {
 
     //

@@ -25,13 +25,13 @@ Taper PIECE_SQUARE[16][64];
 
 static const Taper PIECE_VALUES[8] = {
     Taper(   0,    0),   // EMPTY
-    Taper( 140,  140),   // KNIGHT
+    Taper( 221,  221),   // KNIGHT
     Taper( 100,  100),   // PAWN
     Taper(   0,    0),   // KING
     Taper(   0,    0),   // unused
-    Taper( 176,  176),   // BISHOP
-    Taper( 303,  303),   // ROOK
-    Taper( 334,  334)    // QUEEN
+    Taper( 289,  289),   // BISHOP
+    Taper( 411,  411),   // ROOK
+    Taper( 956,  956)    // QUEEN
 };
 
 static const int KNIGHT_OPENING[64] = {
