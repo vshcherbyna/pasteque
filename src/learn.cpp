@@ -20,8 +20,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <atomic>
 #include <map>
 #include <string>
@@ -758,24 +760,59 @@ bool gridFit(const std::vector<GridSample> & samples, double values[GRID_TERMS],
     return true;
 }
 
-static void gridPrint(const std::string & name, const int table[64]) {
-
-    std::cout << "static const int " << name << "[64] = {" << std::endl;
-
-    for (auto row = 0; row < 8; ++row) {
-        std::cout << "   ";
-
-        for (auto file = 0; file < 8; ++file) {
-            std::cout << std::setw(5) << table[row * 8 + file];
-
-            if (row * 8 + file != 63)
-                std::cout << ",";
-        }
-
-        std::cout << std::endl;
+class GridTee : public std::streambuf
+{
+public:
+    GridTee(std::streambuf * console, std::streambuf * file) : m_console(console), m_file(file) {
     }
 
-    std::cout << "};" << std::endl << std::endl;
+protected:
+    int overflow(int c) override {
+        if (c == EOF)
+            return 0;
+
+        auto spoken = m_console->sputc(static_cast<char>(c));
+        auto kept   = m_file->sputc(static_cast<char>(c));
+
+        return (spoken == EOF || kept == EOF) ? EOF : c;
+    }
+
+    int sync() override {
+        return (m_console->pubsync() == 0 && m_file->pubsync() == 0) ? 0 : -1;
+    }
+
+private:
+    std::streambuf * m_console,
+                   * m_file;
+};
+
+std::string gridSheet(int games, int nodes, unsigned long long seed) {
+
+    std::ostringstream name;
+
+    name << "grid-" << ENGINE_VERSION << "-" << games << "-" << nodes << "-" << seed << ".txt";
+
+    return name.str();
+}
+
+static void gridPrint(std::ostream & sheet, const std::string & name, const int table[64]) {
+
+    sheet << "static const int " << name << "[64] = {" << std::endl;
+
+    for (auto row = 0; row < 8; ++row) {
+        sheet << "   ";
+
+        for (auto file = 0; file < 8; ++file) {
+            sheet << std::setw(5) << table[row * 8 + file];
+
+            if (row * 8 + file != 63)
+                sheet << ",";
+        }
+
+        sheet << std::endl;
+    }
+
+    sheet << "};" << std::endl << std::endl;
 }
 
 int grid(int games, int nodes, unsigned long long seed, int threads, double strength) {
@@ -798,11 +835,27 @@ int grid(int games, int nodes, unsigned long long seed, int threads, double stre
     std::vector<double> values(static_cast<size_t>(GRID_TERMS)),
                         trial(static_cast<size_t>(GRID_TERMS));
 
-    std::cout << "positions " << samples.size() << ", withheld " << withheld.size()
-              << std::endl << std::endl;
+    auto name = gridSheet(games, nodes, seed);
+
+    std::ofstream file(name);
+
+    if (!file)
+        std::cout << "grid: cannot write " << name << ", reporting to the console only"
+                  << std::endl;
+
+    GridTee        tee(std::cout.rdbuf(), file.rdbuf());
+    std::ostream   teed(&tee);
+    std::ostream & sheet = file ? teed : std::cout;
+
+    sheet << ENGINE_NAME << " " << ENGINE_VERSION << " " << ENGINE_ARCH << " grid" << std::endl
+          << "games " << games << ", nodes " << nodes << ", seed " << seed
+          << std::endl << std::endl;
+
+    sheet << "positions " << samples.size() << ", withheld " << withheld.size()
+          << std::endl << std::endl;
 
     if (taught.empty() || withheld.empty()) {
-        std::cout << "grid: need completed games with retained positions in both training and holdout sets"
+        sheet << "grid: need completed games with retained positions in both training and holdout sets"
                   << std::endl;
         return 1;
     }
@@ -822,7 +875,7 @@ int grid(int games, int nodes, unsigned long long seed, int threads, double stre
 
             auto loss = gridLoss(withheld, trial.data());
 
-            std::cout << "  strength " << std::setw(6) << GRID_STRENGTH[which]
+            sheet << "  strength " << std::setw(6) << GRID_STRENGTH[which]
                       << "   held-out loss " << std::setprecision(8) << loss << std::endl;
 
             if (found < 0 || loss < best) {
@@ -832,29 +885,29 @@ int grid(int games, int nodes, unsigned long long seed, int threads, double stre
         }
 
         if (found < 0) {
-            std::cout << "grid: nothing to fit" << std::endl;
+            sheet << "grid: nothing to fit" << std::endl;
             return 1;
         }
 
         strength = GRID_STRENGTH[found];
-        std::cout << std::endl;
+        sheet << std::endl;
     }
     else {
         if (!gridFit(taught, trial.data(), strength)) {
-            std::cout << "grid: nothing to fit" << std::endl;
+            sheet << "grid: nothing to fit" << std::endl;
             return 1;
         }
 
-        std::cout << "  strength " << std::setw(6) << strength << "   held-out loss "
+        sheet << "  strength " << std::setw(6) << strength << "   held-out loss "
                   << std::setprecision(8) << gridLoss(withheld, trial.data())
                   << std::endl << std::endl;
     }
 
-    std::cout << "strength " << strength << ", refitted on every position"
+    sheet << "strength " << strength << ", refitted on every position"
               << std::endl << std::endl;
 
     if (!gridFit(samples, values.data(), strength)) {
-        std::cout << "grid: nothing to fit" << std::endl;
+        sheet << "grid: nothing to fit" << std::endl;
         return 1;
     }
 
@@ -877,11 +930,11 @@ int grid(int games, int nodes, unsigned long long seed, int threads, double stre
     auto scale = (std::fabs(centre[0]) > 1.0e-12) ? 100.0 / centre[0] : 0.0;
 
     for (auto slot = 0; slot < 6; ++slot)
-        std::cout << "  " << std::left << std::setw(8) << GRID_NAMES[slot] << std::right
+        sheet << "  " << std::left << std::setw(8) << GRID_NAMES[slot] << std::right
                   << std::setw(6) << static_cast<int>(std::floor(centre[slot] * scale + 0.5))
                   << std::endl;
 
-    std::cout << "  " << std::left << std::setw(8) << "tempo" << std::right << std::setw(6)
+    sheet << "  " << std::left << std::setw(8) << "tempo" << std::right << std::setw(6)
               << static_cast<int>(std::floor(values[GRID_TERMS - 1] * scale + 0.5))
               << std::endl << std::endl;
 
@@ -897,9 +950,12 @@ int grid(int games, int nodes, unsigned long long seed, int threads, double stre
             table[square] = never ? 0 : static_cast<int>(std::floor(shape * scale + 0.5));
         }
 
-        gridPrint(std::string(GRID_NAMES[slot]) + "_OPENING", table);
-        gridPrint(std::string(GRID_NAMES[slot]) + "_CLOSING", table);
+        gridPrint(sheet, std::string(GRID_NAMES[slot]) + "_OPENING", table);
+        gridPrint(sheet, std::string(GRID_NAMES[slot]) + "_CLOSING", table);
     }
+
+    if (file)
+        std::cout << "written to " << name << std::endl;
 
     return 0;
 }

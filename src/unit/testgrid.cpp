@@ -21,6 +21,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -254,6 +256,72 @@ TEST(Grid_fit, Negative) {
         EXPECT_EQ(0.0, values[static_cast<size_t>(k)]);
 }
 
+//
+//  A result that only ever reached stdout depended on the shell getting a redirection right, and
+//  three shells get it three different ways. The sheet is the artifact; stdout is a courtesy
+//
+
+TEST(Grid_sheet, RecordsTheRunToAFile) {
+
+    auto name = gridSheet(40, 400, 20261107);
+
+    std::remove(name.c_str());
+
+    std::ostringstream output;
+    auto previous = std::cout.rdbuf(output.rdbuf());
+    auto result = grid(40, 400, 20261107, 2, 16.0);
+    std::cout.rdbuf(previous);
+
+    ASSERT_EQ(0, result);
+
+    std::ifstream file(name);
+
+    ASSERT_TRUE(file.good()) << name;
+
+    std::stringstream kept;
+
+    kept << file.rdbuf();
+    file.close();
+
+    auto text = kept.str();
+
+    //  the sheet names the build that generated the games, and the arguments that reproduce them
+
+    EXPECT_NE(std::string::npos, text.find(ENGINE_VERSION)) << text;
+    EXPECT_NE(std::string::npos, text.find("games 40, nodes 400, seed 20261107")) << text;
+    EXPECT_NE(std::string::npos, text.find("PAWN_OPENING[64]")) << text;
+    EXPECT_NE(std::string::npos, text.find("KING_CLOSING[64]")) << text;
+
+    //  and the thread count is absent on purpose, so two runs of it compare byte for byte
+
+    EXPECT_EQ(std::string::npos, text.find("threads")) << text;
+
+    //
+    //  What reached the console is what reached the file, and then one line more: the console is
+    //  told where the sheet went, which the sheet itself has no business repeating
+    //
+
+    EXPECT_EQ(static_cast<size_t>(0), output.str().find(text));
+    EXPECT_NE(std::string::npos, output.str().find("written to " + name));
+    EXPECT_EQ(std::string::npos, text.find("written to"));
+
+    std::remove(name.c_str());
+}
+
+TEST(Grid_sheet, NamesTheBuildAndTheArguments) {
+
+    auto name = gridSheet(100000, 5000, 20261107);
+
+    EXPECT_NE(std::string::npos, name.find(ENGINE_VERSION)) << name;
+    EXPECT_NE(std::string::npos, name.find("100000")) << name;
+    EXPECT_NE(std::string::npos, name.find("5000")) << name;
+    EXPECT_NE(std::string::npos, name.find("20261107")) << name;
+
+    //  a refit on the same seed by a newer build must not overwrite its predecessor
+
+    EXPECT_NE(name, gridSheet(100000, 5000, 20261108));
+}
+
 TEST(Grid_samples, Deterministic) {
 
     std::vector<GridSample> one,
@@ -325,6 +393,8 @@ TEST(Grid_samples, HoldoutKeepsWholeGamesTogether) {
     auto result = grid(6, 400, 4242, 4, 0.0);
     std::cout.rdbuf(previous);
 
+    std::remove(gridSheet(6, 400, 4242).c_str());
+
     EXPECT_EQ(0, result);
 
     auto held = first.size() + six.size() - five.size();
@@ -339,6 +409,8 @@ TEST(Grid_samples, RejectsAnEmptyTrainingPartition) {
     auto previous = std::cout.rdbuf(output.rdbuf());
     auto result = grid(1, 400, 4242, 1, 0.0);
     std::cout.rdbuf(previous);
+
+    std::remove(gridSheet(1, 400, 4242).c_str());
 
     EXPECT_EQ(1, result);
     EXPECT_NE(std::string::npos, output.str().find("both training and holdout sets"));

@@ -25,5 +25,18 @@
 
 pasteque_namespace_begin
 
+inline constexpr const char * ENGINE_NAME    = "Pasteque";
+inline constexpr const char * ENGINE_VERSION = "0.0.6";
+inline constexpr const char * ENGINE_AUTHOR  = "Volodymyr Shcherbyna (2018-2026)";
+
+inline constexpr const char * ENGINE_ARCH =
+#if defined(PASTEQUE_PEXT)
+    "64 BMI2";
+#elif defined(__x86_64__) || defined(_M_X64)
+    "64 POPCNT";
+#else
+    "64";
+#endif
+
 pasteque_namespace_end
 #endif // PASTEQUE_H

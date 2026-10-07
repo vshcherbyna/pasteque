@@ -33,18 +33,6 @@ pasteque_namespace_begin
 
 static_assert(sizeof(void *) == 8, "the engine is 64 bit only");
 
-static const char * ENGINE_NAME    = "Pasteque";
-static const char * ENGINE_VERSION = "0.0.5";
-static const char * ENGINE_AUTHOR  = "Volodymyr Shcherbyna (2018-2026)";
-
-static const char * ENGINE_ARCH =
-#if defined(PASTEQUE_PEXT)
-    "64 BMI2";
-#elif defined(__x86_64__) || defined(_M_X64)
-    "64 POPCNT";
-#else
-    "64";
-#endif
 
 static void tokenize(const std::string & line, std::vector<std::string> & tokens) {
     std::string token;
