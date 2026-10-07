@@ -20,6 +20,7 @@
 #ifndef LEARN_H
 #define LEARN_H
 
+#include <string>
 #include <vector>
 
 #include "pasteque.h"
@@ -84,6 +85,7 @@ void gridTerms(const Board & board, GridSample & sample);
 void gridSamples(std::vector<GridSample> & samples, int games, int nodes, unsigned long long seed, int threads);
 bool   gridFit(const std::vector<GridSample> & samples, double values[GRID_TERMS], double strength);
 double gridLoss(const std::vector<GridSample> & samples, const double values[GRID_TERMS]);
+std::string gridSheet(int games, int nodes, unsigned long long seed);
 int    grid(int games, int nodes, unsigned long long seed, int threads, double strength);
 
 pasteque_namespace_end
