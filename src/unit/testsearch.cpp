@@ -308,6 +308,48 @@ TEST(Search_order, VictimThenAttacker) {
     EXPECT_EQ(moves[2].toString(), "d4c5");
 }
 
+TEST(Search_order, KnightOutranksPawn) {
+
+    //
+    //  The cheapest neighbouring pair. Taking the knight with the queen has to beat taking the
+    //  pawn with a pawn, which is the widest margin of the four and so the least likely to give
+    //  out - it is here because the pair that binds has moved on both refits so far
+    //
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("7k/8/8/2pn4/1P6/8/8/3Q2K1 w - - 0 1"));
+
+    moves.generateLegal(board);
+    searcher.order(moves);
+
+    EXPECT_EQ(moves[0].toString(), "d1d5");
+    EXPECT_EQ(moves[1].toString(), "b4c5");
+}
+
+TEST(Search_order, RookOutranksBishop) {
+
+    //
+    //  Taking the rook with the queen has to beat taking the bishop with a pawn. The king stands
+    //  on h1 rather than g1 because a bishop on c5 would otherwise be giving check, and a
+    //  restricted move list would not be testing the ordering
+    //
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("7k/8/8/2br4/1P6/8/8/3Q3K w - - 0 1"));
+
+    moves.generateLegal(board);
+    searcher.order(moves);
+
+    EXPECT_EQ(moves[0].toString(), "d1d5");
+    EXPECT_EQ(moves[1].toString(), "b4c5");
+}
+
 TEST(Search_order, BishopOutranksKnight) {
 
     //

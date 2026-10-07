@@ -247,22 +247,30 @@ TEST(Judge_pieceSquare, Positive)
     EXPECT_EQ(Judge::pieceSquare(board).closing, 0);
 
     //
-    //  Only material is fitted so far, so every square of a piece carries the same number.
-    //  The squares stay flat until they are fitted in their own right
+    //  The squares are fitted in their own right now, so the flatness this test used to insist
+    //  on is the one thing it must no longer see. A fold that did not land, or an init that
+    //  stopped reading the tables, would leave every square of a piece carrying the same number
     //
     //  The entries were once bounded by the width of the random draw. They are fitted now, so
-    //  the only bound left worth insisting on is that none of them drifts near a mate score
+    //  the only bound left worth insisting on is that none of them drifts near a mate score.
+    //  The queen stands for all of them, carrying the largest value and so the largest entries
     //
+
+    auto shaped = false;
 
     for (auto square = 0; square < 64; ++square)
     {
-        EXPECT_EQ(PIECE_SQUARE[WHITE_KNIGHT][square].opening, PIECE_SQUARE[WHITE_KNIGHT][0].opening);
-        EXPECT_EQ(PIECE_SQUARE[WHITE_KNIGHT][square].closing, PIECE_SQUARE[WHITE_KNIGHT][0].closing);
+        if (PIECE_SQUARE[WHITE_KNIGHT][square].opening != PIECE_SQUARE[WHITE_KNIGHT][0].opening)
+            shaped = true;
+
+        EXPECT_EQ(PIECE_SQUARE[WHITE_KNIGHT][square].opening, PIECE_SQUARE[WHITE_KNIGHT][square].closing);
         EXPECT_LT(PIECE_SQUARE[WHITE_QUEEN][square].opening,  int(MATE_SCORE) / 8);
         EXPECT_GT(PIECE_SQUARE[WHITE_QUEEN][square].opening, -int(MATE_SCORE) / 8);
         EXPECT_LT(PIECE_SQUARE[WHITE_QUEEN][square].closing,  int(MATE_SCORE) / 8);
         EXPECT_GT(PIECE_SQUARE[WHITE_QUEEN][square].closing, -int(MATE_SCORE) / 8);
     }
+
+    EXPECT_TRUE(shaped);
 
     //  black's tables are white's, mirrored
 

@@ -28,7 +28,7 @@ enum
 {
     ORDER_CAPTURE   = 100000,
     ORDER_PROMOTION = 200000,
-    ORDER_VICTIM    = 16
+    ORDER_VICTIM    = 32
 };
 
 //
@@ -42,7 +42,7 @@ enum
 //  the values grow to
 //
 
-static const int ORDER_VALUES[8] = { 0, 221, 100, 956, 0, 289, 411, 956 };
+static const int ORDER_VALUES[8] = { 0, 190, 100, 694, 0, 227, 344, 694 };
 
 Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();

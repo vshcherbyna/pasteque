@@ -26,6 +26,8 @@
 
 pasteque_namespace_begin
 
+class Board;
+
 enum
 {
     LEARN_GAMES   = 1000,
@@ -47,6 +49,42 @@ struct LearnRow
 void learnRows(std::vector<LearnRow> & rows, int games, int nodes, unsigned long long seed, int threads);
 bool learnFit(const std::vector<LearnRow> & rows, double values[6]);
 int  learn(int games, int nodes, unsigned long long seed, int threads);
+
+enum
+{
+    GRID_TERMS   = 6 * 64 + 1,
+    GRID_ROUNDS  = 30,
+    GRID_SAMPLES = 2000000,
+    GRID_TRIALS  = 5,
+    GRID_HOLDOUT = 5
+};
+
+//
+//  One retained position: the squares it occupies, and how often the games that reached it were
+//  won. score and seen carry the same meaning they do in LearnRow, so a target of any fraction
+//  can be stated exactly. withheld is assigned by opening index and is the same for every
+//  retained position from that game
+//
+
+struct GridSample
+{
+    short           term[32];
+
+    unsigned short  score,
+                    seen;
+
+    unsigned char   terms;
+
+    bool            withheld = false;
+};
+
+extern const unsigned char GRID_KINDS[6];
+
+void gridTerms(const Board & board, GridSample & sample);
+void gridSamples(std::vector<GridSample> & samples, int games, int nodes, unsigned long long seed, int threads);
+bool   gridFit(const std::vector<GridSample> & samples, double values[GRID_TERMS], double strength);
+double gridLoss(const std::vector<GridSample> & samples, const double values[GRID_TERMS]);
+int    grid(int games, int nodes, unsigned long long seed, int threads, double strength);
 
 pasteque_namespace_end
 #endif // LEARN_H

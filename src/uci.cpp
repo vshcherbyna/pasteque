@@ -34,7 +34,7 @@ pasteque_namespace_begin
 static_assert(sizeof(void *) == 8, "the engine is 64 bit only");
 
 static const char * ENGINE_NAME    = "Pasteque";
-static const char * ENGINE_VERSION = "0.0.4";
+static const char * ENGINE_VERSION = "0.0.5";
 static const char * ENGINE_AUTHOR  = "Volodymyr Shcherbyna (2018-2026)";
 
 static const char * ENGINE_ARCH =
@@ -108,6 +108,13 @@ int Uci::handleCmdLine(int argc, char *argv[]) {
                      argc > 3 ? std::atoi(argv[3]) : static_cast<int>(LEARN_NODES),
                      argc > 4 ? std::strtoull(argv[4], nullptr, 10) : 0,
                      argc > 5 ? std::atoi(argv[5]) : 0);
+
+    if (argc > 1 && std::string(argv[1]) == "grid")
+        return grid(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(LEARN_GAMES),
+                    argc > 3 ? std::atoi(argv[3]) : static_cast<int>(LEARN_NODES),
+                    argc > 4 ? std::strtoull(argv[4], nullptr, 10) : 0,
+                    argc > 5 ? std::atoi(argv[5]) : 0,
+                    argc > 6 ? std::atof(argv[6]) : 0.0);
 
     if (argc > 1 && std::string(argv[1]) == "openings")
         return openings(argc > 2 ? std::atoi(argv[2]) : static_cast<int>(OPENINGS_COUNT),
