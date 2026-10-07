@@ -55,9 +55,10 @@ enum
 {
     GRID_TERMS   = 6 * 64 + 1,
     GRID_ROUNDS  = 30,
-    GRID_SAMPLES = 2000000,
+    GRID_SAMPLES = 20000000,
     GRID_TRIALS  = 5,
-    GRID_HOLDOUT = 5
+    GRID_HOLDOUT = 5,
+    GRID_BLOCKS  = 64
 };
 
 //
@@ -79,12 +80,22 @@ struct GridSample
     bool            withheld = false;
 };
 
+struct GridTally
+{
+    int                 played,
+                        concluded;
+
+    unsigned long long  spent;
+};
+
 extern const unsigned char GRID_KINDS[6];
 
 void gridTerms(const Board & board, GridSample & sample);
-void gridSamples(std::vector<GridSample> & samples, int games, int nodes, unsigned long long seed, int threads);
-bool   gridFit(const std::vector<GridSample> & samples, double values[GRID_TERMS], double strength);
+void gridSamples(std::vector<GridSample> & samples, int games, int nodes, unsigned long long seed, int threads, GridTally & tally);
+bool   gridFit(const std::vector<GridSample> & samples, double values[GRID_TERMS], double strength, int threads, double & settled);
 double gridLoss(const std::vector<GridSample> & samples, const double values[GRID_TERMS]);
+int gridVictim(const int value[5], int & narrowest, int & spread);
+
 std::string gridSheet(int games, int nodes, unsigned long long seed);
 int    grid(int games, int nodes, unsigned long long seed, int threads, double strength);
 

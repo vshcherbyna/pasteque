@@ -24,13 +24,6 @@
 
 pasteque_namespace_begin
 
-enum
-{
-    ORDER_CAPTURE   = 100000,
-    ORDER_PROMOTION = 200000,
-    ORDER_VICTIM    = 32
-};
-
 //
 //  The fitted piece values. The king is not among them - it cancels between the sides, so the
 //  fit cannot see it - and it takes the dearest attacker's value, because any other attacker is
@@ -42,7 +35,7 @@ enum
 //  the values grow to
 //
 
-static const int ORDER_VALUES[8] = { 0, 209, 100, 660, 0, 242, 350, 660 };
+static const int ORDER_VALUES[8] = { 0, 199, 100, 627, 0, 226, 335, 627 };
 
 Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();

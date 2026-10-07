@@ -33,6 +33,13 @@ enum
     POLL_MASK = 2047
 };
 
+enum
+{
+    ORDER_CAPTURE   = 100000,
+    ORDER_PROMOTION = 200000,
+    ORDER_VICTIM    = 32
+};
+
 typedef void (*Watcher)(int depth, int score, unsigned long long nodes, unsigned long long msec, Move best);
 
 class Search
