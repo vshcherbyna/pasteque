@@ -393,4 +393,515 @@ int learn(int games, int nodes, unsigned long long seed, int threads) {
     return 0;
 }
 
+
+static const int GRID_SLOT[8] = { -1, 1, 0, 5, -1, 2, 3, 4 };
+
+const unsigned char GRID_KINDS[6] = { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
+
+static const char * const GRID_NAMES[6] = { "PAWN", "KNIGHT", "BISHOP", "ROOK", "QUEEN", "KING" };
+
+static const int GRID_ORDER[6] = { 1, 0, 5, 2, 3, 4 };
+
+static const double GRID_SMOOTH = 1.0e-4;
+
+static const double GRID_MIRROR = 1.0e-4;
+
+static const double GRID_RIDGE = 1.0e-6;
+
+static const double GRID_STRENGTH[GRID_TRIALS] = { 0.25, 1.0, 4.0, 16.0, 64.0 };
+
+void gridTerms(const Board & board, GridSample & sample) {
+
+    auto pieces = board.getAllPieces();
+    auto flip   = (board.getSide() == WHITE) ? 1 : -1;
+
+    sample.terms = 0;
+
+    while (pieces) {
+        auto square = popFirstOne(pieces);
+        auto piece  = board.getPiece(square);
+        auto slot   = GRID_SLOT[piece & 7];
+
+        if (slot < 0)
+            continue;
+
+        auto white = piece_color(piece) == WHITE;
+        auto term  = slot * 64 + (white ? (square ^ 56) : square) + 1;
+
+        sample.term[sample.terms++] = static_cast<short>(white ? flip * term : -flip * term);
+    }
+}
+
+static void gridPlayOut(const std::string & opening, const Clock & clock, Search & searcher,
+                        std::vector<GridSample> & basket) {
+
+    Board board;
+
+    if (!board.setFen(opening))
+        return;
+
+    std::vector<GridSample> samples;
+
+    auto result = 0;
+    auto ended  = false;
+
+    for (auto ply = 0; ply < static_cast<int>(LEARN_LIMIT); ++ply) {
+        if (concluded(board, result)) {
+            ended = true;
+            break;
+        }
+
+        auto best = searcher.bestMove(board, clock);
+
+        if (static_cast<int>(best) == 0)
+            break;
+
+        if (!board.getCheckers() && best.getCapture() == EMPTY && !best.getPromotion() && !starved(board)) {
+            GridSample sample;
+
+            gridTerms(board, sample);
+
+            sample.score = board.getSide();
+            sample.seen  = 1;
+
+            samples.push_back(sample);
+        }
+
+        Rewind undo;
+
+        board.doMove(best, undo);
+    }
+
+    if (!ended)
+        return;
+
+    if (samples.size() > static_cast<size_t>(LEARN_KEEP)) {
+        std::vector<GridSample> thinned;
+
+        auto stride = static_cast<double>(samples.size()) / LEARN_KEEP;
+
+        for (auto i = 0; i < static_cast<int>(LEARN_KEEP); ++i)
+            thinned.push_back(samples[static_cast<size_t>(i * stride)]);
+
+        samples.swap(thinned);
+    }
+
+    for (auto & sample : samples) {
+        auto mine = (sample.score == WHITE) ? result : -result;
+
+        sample.score = static_cast<unsigned short>(mine + 1);
+        basket.push_back(sample);
+    }
+}
+
+void gridSamples(std::vector<GridSample> & samples, int games, int nodes, unsigned long long seed, int threads) {
+
+    if (games < 1)
+        games = LEARN_GAMES;
+
+    if (nodes < 1)
+        nodes = LEARN_NODES;
+
+    if (threads < 1) {
+        threads = static_cast<int>(std::thread::hardware_concurrency());
+
+        if (threads < 1)
+            threads = 1;
+    }
+
+    if (threads > static_cast<int>(LEARN_THREADS))
+        threads = LEARN_THREADS;
+
+    auto ceiling = static_cast<int>(GRID_SAMPLES) / static_cast<int>(LEARN_KEEP);
+
+    if (games > ceiling)
+        games = ceiling;
+
+    std::vector<std::string> openings;
+
+    openingPositions(openings, games, OPENINGS_PLIES, seed);
+
+    Judge::init();
+
+    std::vector<std::vector<GridSample>> shares(openings.size());
+
+    std::atomic<size_t> next{0},
+                        done{0};
+
+    auto note = (games >= 20) ? static_cast<size_t>(games / 20) : static_cast<size_t>(games);
+
+    auto labour = [&]() {
+        Clock  clock({ "go", "nodes", std::to_string(nodes) }, WHITE);
+        Search searcher;
+
+        for (;;) {
+            auto index = next++;
+
+            if (index >= openings.size())
+                return;
+
+            gridPlayOut(openings[index], clock, searcher, shares[index]);
+
+            auto far = ++done;
+
+            if (note && (far % note) == 0)
+                std::cerr << ("grid: " + std::to_string(far) + " of "
+                              + std::to_string(openings.size()) + " games\n");
+        }
+    };
+
+    std::vector<std::thread> hands;
+
+    for (auto i = 0; i < threads; ++i)
+        hands.push_back(std::thread(labour));
+
+    for (auto & hand : hands)
+        hand.join();
+
+    samples.clear();
+
+    for (size_t game = 0; game < shares.size(); ++game) {
+        auto & basket = shares[game];
+
+        for (auto & sample : basket)
+            sample.withheld = (game % GRID_HOLDOUT) == 0;
+
+        samples.insert(samples.end(), basket.begin(), basket.end());
+    }
+}
+
+static bool cholesky(std::vector<double> & matrix, std::vector<double> & rhs, int n) {
+
+    for (auto i = 0; i < n; ++i) {
+        for (auto j = 0; j < i; ++j) {
+            auto sum = matrix[static_cast<size_t>(i) * n + j];
+
+            for (auto k = 0; k < j; ++k)
+                sum -= matrix[static_cast<size_t>(i) * n + k] * matrix[static_cast<size_t>(j) * n + k];
+
+            matrix[static_cast<size_t>(i) * n + j] = sum / matrix[static_cast<size_t>(j) * n + j];
+        }
+
+        auto sum = matrix[static_cast<size_t>(i) * n + i];
+
+        for (auto k = 0; k < i; ++k)
+            sum -= matrix[static_cast<size_t>(i) * n + k] * matrix[static_cast<size_t>(i) * n + k];
+
+        if (sum <= 0.0)
+            return false;
+
+        matrix[static_cast<size_t>(i) * n + i] = std::sqrt(sum);
+    }
+
+    for (auto i = 0; i < n; ++i) {
+        auto sum = rhs[static_cast<size_t>(i)];
+
+        for (auto k = 0; k < i; ++k)
+            sum -= matrix[static_cast<size_t>(i) * n + k] * rhs[static_cast<size_t>(k)];
+
+        rhs[static_cast<size_t>(i)] = sum / matrix[static_cast<size_t>(i) * n + i];
+    }
+
+    for (auto i = n - 1; i >= 0; --i) {
+        auto sum = rhs[static_cast<size_t>(i)];
+
+        for (auto k = i + 1; k < n; ++k)
+            sum -= matrix[static_cast<size_t>(k) * n + i] * rhs[static_cast<size_t>(k)];
+
+        rhs[static_cast<size_t>(i)] = sum / matrix[static_cast<size_t>(i) * n + i];
+    }
+
+    return true;
+}
+
+//
+//  The sum a position stands for, which is the evaluation the fit is trying to reproduce
+//
+
+static double gridSum(const GridSample & sample, const double values[GRID_TERMS]) {
+
+    auto sum = values[GRID_TERMS - 1];
+
+    for (auto i = 0; i < sample.terms; ++i) {
+        auto term = sample.term[i];
+
+        sum += (term > 0) ? values[term - 1] : -values[-term - 1];
+    }
+
+    return std::max(-30.0, std::min(30.0, sum));
+}
+
+double gridLoss(const std::vector<GridSample> & samples, const double values[GRID_TERMS]) {
+
+    auto total = 0.0;
+    auto seen  = 0.0;
+
+    for (const auto & sample : samples) {
+        auto chance = 1.0 / (1.0 + std::exp(-gridSum(sample, values)));
+        auto mean   = 0.5 * sample.score / sample.seen;
+        auto apart  = chance - mean;
+
+        total += sample.seen * apart * apart;
+        seen  += sample.seen;
+    }
+
+    return seen ? total / seen : 0.0;
+}
+
+bool gridFit(const std::vector<GridSample> & samples, double values[GRID_TERMS], double strength) {
+
+    const auto n = static_cast<int>(GRID_TERMS);
+
+    for (auto k = 0; k < n; ++k)
+        values[k] = 0.0;
+
+    if (samples.empty())
+        return false;
+
+    auto smooth = GRID_SMOOTH * strength * static_cast<double>(samples.size());
+    auto mirror = GRID_MIRROR * strength * static_cast<double>(samples.size());
+    auto ridge  = GRID_RIDGE * static_cast<double>(samples.size());
+
+    std::vector<double> matrix(static_cast<size_t>(n) * n),
+                        rhs(static_cast<size_t>(n));
+
+    for (auto round = 0; round < static_cast<int>(GRID_ROUNDS); ++round) {
+        std::fill(matrix.begin(), matrix.end(), 0.0);
+        std::fill(rhs.begin(), rhs.end(), 0.0);
+
+        for (const auto & sample : samples) {
+            int    where[33];
+            double sign[33];
+
+            auto count = 0;
+
+            for (auto i = 0; i < sample.terms; ++i) {
+                auto term = sample.term[i];
+
+                where[count] = (term > 0) ? term - 1 : -term - 1;
+                sign[count]  = (term > 0) ? 1.0 : -1.0;
+                ++count;
+            }
+
+            where[count] = n - 1;
+            sign[count]  = 1.0;
+            ++count;
+
+            auto sum    = gridSum(sample, values);
+            auto seen   = static_cast<double>(sample.seen);
+            auto chance = 1.0 / (1.0 + std::exp(-sum));
+            auto slope  = chance * (1.0 - chance);
+            auto mean   = 0.5 * sample.score / seen;
+            auto wrong  = 2.0 * seen * (chance - mean) * slope;
+            auto curve  = 2.0 * seen * slope * slope;
+
+            for (auto a = 0; a < count; ++a) {
+                rhs[static_cast<size_t>(where[a])] -= wrong * sign[a];
+
+                for (auto b = 0; b < count; ++b)
+                    matrix[static_cast<size_t>(where[a]) * n + where[b]] += curve * sign[a] * sign[b];
+            }
+        }
+
+        for (auto slot = 0; slot < 6; ++slot)
+            for (auto square = 0; square < 64; ++square) {
+                auto here = slot * 64 + square;
+
+                for (auto step = 0; step < 2; ++step) {
+                    if (step == 0 && (square & 7) == 7)
+                        continue;
+
+                    if (step == 1 && (square >> 3) == 7)
+                        continue;
+
+                    auto next = here + (step ? 8 : 1);
+
+                    matrix[static_cast<size_t>(here) * n + here] += 2.0 * smooth;
+                    matrix[static_cast<size_t>(next) * n + next] += 2.0 * smooth;
+                    matrix[static_cast<size_t>(here) * n + next] -= 2.0 * smooth;
+                    matrix[static_cast<size_t>(next) * n + here] -= 2.0 * smooth;
+
+                    rhs[static_cast<size_t>(here)] -= 2.0 * smooth * (values[here] - values[next]);
+                    rhs[static_cast<size_t>(next)] -= 2.0 * smooth * (values[next] - values[here]);
+                }
+            }
+
+        for (auto slot = 0; slot < 6; ++slot)
+            for (auto square = 0; square < 64; ++square) {
+                if ((square & 7) >= 4)
+                    continue;
+
+                auto here = slot * 64 + square;
+                auto over = slot * 64 + (square & ~7) + (7 - (square & 7));
+
+                matrix[static_cast<size_t>(here) * n + here] += 2.0 * mirror;
+                matrix[static_cast<size_t>(over) * n + over] += 2.0 * mirror;
+                matrix[static_cast<size_t>(here) * n + over] -= 2.0 * mirror;
+                matrix[static_cast<size_t>(over) * n + here] -= 2.0 * mirror;
+
+                rhs[static_cast<size_t>(here)] -= 2.0 * mirror * (values[here] - values[over]);
+                rhs[static_cast<size_t>(over)] -= 2.0 * mirror * (values[over] - values[here]);
+            }
+
+        for (auto k = 0; k < n; ++k) {
+            matrix[static_cast<size_t>(k) * n + k] += 2.0 * ridge;
+            rhs[static_cast<size_t>(k)] -= 2.0 * ridge * values[k];
+        }
+
+        if (!cholesky(matrix, rhs, n))
+            return false;
+
+        for (auto k = 0; k < n; ++k)
+            values[k] += rhs[static_cast<size_t>(k)];
+    }
+
+    return true;
+}
+
+static void gridPrint(const std::string & name, const int table[64]) {
+
+    std::cout << "static const int " << name << "[64] = {" << std::endl;
+
+    for (auto row = 0; row < 8; ++row) {
+        std::cout << "   ";
+
+        for (auto file = 0; file < 8; ++file) {
+            std::cout << std::setw(5) << table[row * 8 + file];
+
+            if (row * 8 + file != 63)
+                std::cout << ",";
+        }
+
+        std::cout << std::endl;
+    }
+
+    std::cout << "};" << std::endl << std::endl;
+}
+
+int grid(int games, int nodes, unsigned long long seed, int threads, double strength) {
+
+    std::vector<GridSample> samples;
+
+    gridSamples(samples, games, nodes, seed, threads);
+
+    //
+    //  Every fifth opening is withheld with all of its retained positions, so no game can
+    //  contribute to both the fit and its validation
+    //
+
+    std::vector<GridSample> taught,
+                            withheld;
+
+    for (const auto & sample : samples)
+        (sample.withheld ? withheld : taught).push_back(sample);
+
+    std::vector<double> values(static_cast<size_t>(GRID_TERMS)),
+                        trial(static_cast<size_t>(GRID_TERMS));
+
+    std::cout << "positions " << samples.size() << ", withheld " << withheld.size()
+              << std::endl << std::endl;
+
+    if (taught.empty() || withheld.empty()) {
+        std::cout << "grid: need completed games with retained positions in both training and holdout sets"
+                  << std::endl;
+        return 1;
+    }
+
+    //
+    //  The loss is nearly flat in the strength because it is dominated by material, so it
+    //  reports rather than decides when a strength has been named. Asked for one, it sweeps
+    //
+
+    if (strength <= 0.0) {
+        auto best  = 0.0;
+        auto found = -1;
+
+        for (auto which = 0; which < static_cast<int>(GRID_TRIALS); ++which) {
+            if (!gridFit(taught, trial.data(), GRID_STRENGTH[which]))
+                continue;
+
+            auto loss = gridLoss(withheld, trial.data());
+
+            std::cout << "  strength " << std::setw(6) << GRID_STRENGTH[which]
+                      << "   held-out loss " << std::setprecision(8) << loss << std::endl;
+
+            if (found < 0 || loss < best) {
+                best  = loss;
+                found = which;
+            }
+        }
+
+        if (found < 0) {
+            std::cout << "grid: nothing to fit" << std::endl;
+            return 1;
+        }
+
+        strength = GRID_STRENGTH[found];
+        std::cout << std::endl;
+    }
+    else {
+        if (!gridFit(taught, trial.data(), strength)) {
+            std::cout << "grid: nothing to fit" << std::endl;
+            return 1;
+        }
+
+        std::cout << "  strength " << std::setw(6) << strength << "   held-out loss "
+                  << std::setprecision(8) << gridLoss(withheld, trial.data())
+                  << std::endl << std::endl;
+    }
+
+    std::cout << "strength " << strength << ", refitted on every position"
+              << std::endl << std::endl;
+
+    if (!gridFit(samples, values.data(), strength)) {
+        std::cout << "grid: nothing to fit" << std::endl;
+        return 1;
+    }
+
+    //
+    //  The mean of a table is the value of the piece and what is left over is its shape. The
+    //  overall scale cannot change a move choice, so it is pinned by the pawn as before
+    //
+
+    double centre[6];
+
+    for (auto slot = 0; slot < 6; ++slot) {
+        auto sum = 0.0;
+
+        for (auto square = 0; square < 64; ++square)
+            sum += values[static_cast<size_t>(slot) * 64 + square];
+
+        centre[slot] = sum / 64.0;
+    }
+
+    auto scale = (std::fabs(centre[0]) > 1.0e-12) ? 100.0 / centre[0] : 0.0;
+
+    for (auto slot = 0; slot < 6; ++slot)
+        std::cout << "  " << std::left << std::setw(8) << GRID_NAMES[slot] << std::right
+                  << std::setw(6) << static_cast<int>(std::floor(centre[slot] * scale + 0.5))
+                  << std::endl;
+
+    std::cout << "  " << std::left << std::setw(8) << "tempo" << std::right << std::setw(6)
+              << static_cast<int>(std::floor(values[GRID_TERMS - 1] * scale + 0.5))
+              << std::endl << std::endl;
+
+    for (auto which = 0; which < 6; ++which) {
+        auto slot = GRID_ORDER[which];
+
+        int table[64];
+
+        for (auto square = 0; square < 64; ++square) {
+            auto shape = values[static_cast<size_t>(slot) * 64 + square] - centre[slot];
+            auto never = (slot == 0) && ((square >> 3) == 0 || (square >> 3) == 7);
+
+            table[square] = never ? 0 : static_cast<int>(std::floor(shape * scale + 0.5));
+        }
+
+        gridPrint(std::string(GRID_NAMES[slot]) + "_OPENING", table);
+        gridPrint(std::string(GRID_NAMES[slot]) + "_CLOSING", table);
+    }
+
+    return 0;
+}
+
 pasteque_namespace_end
