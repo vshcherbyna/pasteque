@@ -30,6 +30,7 @@
 #include "../learn.h"
 #include "../board.h"
 #include "../judge.h"
+#include "../search.h"
 
 using namespace pasteque;
 
@@ -170,6 +171,90 @@ double known(int slot, int entry) {
 //  exactly, so this measures the solver rather than the noise in a hard label
 //
 
+namespace {
+
+bool inverted(int multiplier, int better, int worse, int dearest, int cheapest) {
+
+    return multiplier * better - dearest <= multiplier * worse - cheapest;
+}
+
+}
+
+TEST(Grid_victim, BindsOnTheNarrowestRealGap) {
+
+    const int shipped[5] = { 100, 209, 242, 350, 660 };
+
+    int narrowest,
+        spread;
+
+    auto least = gridVictim(shipped, narrowest, spread);
+
+    EXPECT_EQ(33, narrowest);
+    EXPECT_EQ(560, spread);
+    EXPECT_EQ(17, least);
+
+    //  the number means what it says: one below it inverts, at it does not
+
+    EXPECT_TRUE(inverted(least - 1, 242, 209, 660, 100));
+    EXPECT_FALSE(inverted(least, 242, 209, 660, 100));
+}
+
+TEST(Grid_victim, SkipsTiedVictims) {
+
+    //
+    //  Two victims of equal value may be ordered either way, so the tie is not what binds - but
+    //  a tie once stood in for "nothing found yet" and let the next gap overwrite the real
+    //  minimum, which reported 418 where the answer is 12 and called a violation a pass
+    //
+
+    const int tied[5] = { 100, 230, 242, 242, 660 };
+
+    int narrowest,
+        spread;
+
+    auto least = gridVictim(tied, narrowest, spread);
+
+    EXPECT_EQ(12, narrowest);
+    EXPECT_EQ(560, spread);
+    EXPECT_EQ(47, least);
+
+    //  the multiplier the search carries today would invert this pair, and the rule must say so
+
+    EXPECT_TRUE(inverted(static_cast<int>(ORDER_VICTIM), 242, 230, 660, 100));
+    EXPECT_LT(static_cast<int>(ORDER_VICTIM), least);
+
+    EXPECT_FALSE(inverted(least, 242, 230, 660, 100));
+}
+
+TEST(Grid_victim, SortsBeforeMeasuring) {
+
+    //  a bishop below a knight is not impossible, and adjacency is in value either way
+
+    const int jumbled[5] = { 100, 242, 230, 350, 660 };
+    const int ordered[5] = { 100, 230, 242, 350, 660 };
+
+    int a, b, c, d;
+
+    EXPECT_EQ(gridVictim(ordered, a, b), gridVictim(jumbled, c, d));
+    EXPECT_EQ(a, c);
+    EXPECT_EQ(b, d);
+    EXPECT_EQ(12, c);
+}
+
+TEST(Grid_victim, VacuousWhenEveryVictimIsEqual) {
+
+    const int flat[5] = { 100, 100, 100, 100, 100 };
+
+    int narrowest,
+        spread;
+
+    //  no multiplier can separate victims that are worth the same, and none needs to
+
+    EXPECT_EQ(0, gridVictim(flat, narrowest, spread));
+    EXPECT_EQ(0, narrowest);
+    EXPECT_EQ(0, spread);
+}
+
 TEST(Grid_fit, RecoversKnownTables) {
 
     unsigned long long state = 0x9e3779b97f4a7c15ULL;
@@ -209,7 +294,9 @@ TEST(Grid_fit, RecoversKnownTables) {
 
     std::vector<double> values(static_cast<size_t>(GRID_TERMS));
 
-    ASSERT_TRUE(gridFit(samples, values.data(), 1.0));
+    auto settled = 0.0;
+
+    ASSERT_TRUE(gridFit(samples, values.data(), 1.0, 1, settled));
 
     //
     //  The king is the one table the games cannot place: shifting every square of it by the same
@@ -245,12 +332,67 @@ TEST(Grid_fit, RecoversKnownTables) {
     }
 }
 
+TEST(Grid_fit, ThreadCountDoesNotChangeTheFit) {
+
+    unsigned long long state = 0x1571d2c3a9f04e6bULL;
+
+    std::vector<GridSample> samples;
+
+    for (auto round = 0; round < 900; ++round) {
+        GridSample sample;
+
+        sample.terms = 0;
+
+        auto count = 8 + static_cast<int>(roll(state) % 18);
+        auto sum   = 0.0;
+
+        for (auto i = 0; i < count; ++i) {
+            auto slot  = static_cast<int>(roll(state) % 6);
+            auto entry = static_cast<int>(roll(state) % 64);
+            auto taken = (roll(state) & 1) ? 1 : -1;
+
+            sum += taken * known(slot, entry);
+
+            sample.term[sample.terms++] = static_cast<short>(taken * (slot * 64 + entry + 1));
+        }
+
+        auto chance = 1.0 / (1.0 + std::exp(-sum));
+
+        sample.seen  = 400;
+        sample.score = static_cast<unsigned short>(std::floor(chance * 2.0 * sample.seen + 0.5));
+
+        samples.push_back(sample);
+    }
+
+    std::vector<double> alone(static_cast<size_t>(GRID_TERMS)),
+                        crowd(static_cast<size_t>(GRID_TERMS));
+
+    auto settledAlone = 0.0,
+         settledCrowd = 0.0;
+
+    ASSERT_TRUE(gridFit(samples, alone.data(), 1.0, 1, settledAlone));
+    ASSERT_TRUE(gridFit(samples, crowd.data(), 1.0, 16, settledCrowd));
+
+    //  bit-identical, not merely close: EXPECT_EQ on doubles is the point of the test
+
+    for (auto k = 0; k < static_cast<int>(GRID_TERMS); ++k)
+        ASSERT_EQ(alone[static_cast<size_t>(k)], crowd[static_cast<size_t>(k)]) << "term " << k;
+
+    EXPECT_EQ(settledAlone, settledCrowd);
+
+    //  and it has to have actually converged, or the comparison is of two truncations
+
+    EXPECT_LT(settledAlone, 0.01);
+}
+
 TEST(Grid_fit, Negative) {
 
     std::vector<GridSample> samples;
     std::vector<double>     values(static_cast<size_t>(GRID_TERMS));
 
-    EXPECT_FALSE(gridFit(samples, values.data(), 1.0));
+    auto settled = 0.0;
+
+    EXPECT_FALSE(gridFit(samples, values.data(), 1.0, 1, settled));
 
     for (auto k = 0; k < static_cast<int>(GRID_TERMS); ++k)
         EXPECT_EQ(0.0, values[static_cast<size_t>(k)]);
@@ -327,8 +469,10 @@ TEST(Grid_samples, Deterministic) {
     std::vector<GridSample> one,
                             two;
 
-    gridSamples(one, 12, 400, 20261006, 1);
-    gridSamples(two, 12, 400, 20261006, 1);
+    GridTally tally;
+
+    gridSamples(one, 12, 400, 20261006, 1, tally);
+    gridSamples(two, 12, 400, 20261006, 1, tally);
 
     ASSERT_FALSE(one.empty());
     ASSERT_EQ(one.size(), two.size());
@@ -349,8 +493,10 @@ TEST(Grid_samples, ThreadCountDoesNotChangeTheSamples) {
     std::vector<GridSample> one,
                             four;
 
-    gridSamples(one,  24, 400, 4242, 1);
-    gridSamples(four, 24, 400, 4242, 4);
+    GridTally tally;
+
+    gridSamples(one,  24, 400, 4242, 1, tally);
+    gridSamples(four, 24, 400, 4242, 4, tally);
 
     ASSERT_FALSE(one.empty());
     ASSERT_EQ(one.size(), four.size());
@@ -374,12 +520,14 @@ TEST(Grid_samples, HoldoutKeepsWholeGamesTogether) {
                             five,
                             six;
 
+    GridTally tally;
+
     //  Extending a seeded opening run keeps the earlier games unchanged. These prefixes
     //  locate the complete first and sixth games without assuming how many positions survive.
 
-    gridSamples(first, 1, 400, 4242, 1);
-    gridSamples(five,  5, 400, 4242, 1);
-    gridSamples(six,   6, 400, 4242, 4);
+    gridSamples(first, 1, 400, 4242, 1, tally);
+    gridSamples(five,  5, 400, 4242, 1, tally);
+    gridSamples(six,   6, 400, 4242, 4, tally);
 
     ASSERT_FALSE(first.empty());
     ASSERT_GT(five.size(), first.size());
@@ -397,8 +545,13 @@ TEST(Grid_samples, HoldoutKeepsWholeGamesTogether) {
 
     EXPECT_EQ(0, result);
 
+    //
+    //  The counts, not the whole line: the sheet also reports positions per parameter now, and
+    //  this test is about which games were withheld rather than the shape of the report
+    //
+
     auto held = first.size() + six.size() - five.size();
-    auto expected = "positions " + std::to_string(six.size()) + ", withheld " + std::to_string(held) + "\n";
+    auto expected = "positions " + std::to_string(six.size()) + ", withheld " + std::to_string(held);
 
     EXPECT_NE(std::string::npos, output.str().find(expected)) << output.str();
 }
