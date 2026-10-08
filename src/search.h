@@ -37,7 +37,9 @@ enum
 {
     ORDER_CAPTURE   = 100000,
     ORDER_PROMOTION = 200000,
-    ORDER_VICTIM    = 32
+    ORDER_VICTIM    = 32,
+    ORDER_KILLER    = 90000,
+    ORDER_MERIT     = 80000
 };
 
 typedef void (*Watcher)(int depth, int score, unsigned long long nodes, unsigned long long msec, Move best);
@@ -64,7 +66,8 @@ private:
     Move                deepen(Board & board, int depth, Instant started, unsigned int soft);
     int                 alphaBeta(Board & board, int alpha, int beta, int depth, int ply);
     int                 quiescence(Board & board, int alpha, int beta, int ply);
-    void                order(Moves & moves);
+    void                order(Moves & moves, int ply);
+    void                reward(Move move, int depth, int ply);
     void                pollClock();
 
 private:
@@ -77,6 +80,14 @@ private:
     Instant             m_deadline;
     bool                m_timed,
                         m_aborted;
+
+#if defined(UNIT_TEST)
+public:
+#else
+private:
+#endif
+    Move                m_killers[PLY_LIMIT][2] = {};
+    int                 m_merit[16][64] = {};
 };
 
 pasteque_namespace_end
