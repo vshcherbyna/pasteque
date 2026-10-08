@@ -301,11 +301,125 @@ TEST(Search_order, VictimThenAttacker) {
     ASSERT_TRUE(board.setFen("7k/8/8/2n1q3/3P4/8/8/4R1K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves);
+    searcher.order(moves, 0);
 
     EXPECT_EQ(moves[0].toString(), "d4e5");
     EXPECT_EQ(moves[1].toString(), "e1e5");
     EXPECT_EQ(moves[2].toString(), "d4c5");
+}
+
+TEST(Search_order, AKillerOutranksTheRichestQuiet) {
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("4k3/8/8/8/8/8/8/R3K2R w - - 0 1"));
+
+    moves.generateLegal(board);
+
+    auto killer = moves[moves.size() - 1];
+    auto richest = moves[0];
+
+    for (auto i = 0; i < 4000; ++i)
+        searcher.reward(richest, 64, 5);
+
+    searcher.reward(killer, 1, 0);
+    searcher.order(moves, 0);
+
+    EXPECT_EQ(moves[0].toString(), killer.toString());
+}
+
+TEST(Search, ASearchFillsTheOrderingTables) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w - - 4 4"));
+
+    searcher.bestMove(board, 4);
+
+    auto stored = 0,
+         earned = 0;
+
+    for (auto ply = 0; ply < static_cast<int>(PLY_LIMIT); ++ply)
+        if (static_cast<int>(searcher.m_killers[ply][0]))
+            ++stored;
+
+    for (auto piece = 0; piece < 16; ++piece)
+        for (auto square = 0; square < 64; ++square)
+            if (searcher.m_merit[piece][square])
+                ++earned;
+
+    EXPECT_GT(stored, 0);
+    EXPECT_GT(earned, 0);
+}
+
+TEST(Search_order, MeritOutlivesThePlyThatEarnedIt) {
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("4k3/8/8/8/8/8/8/R3K2R w - - 0 1"));
+
+    moves.generateLegal(board);
+
+    auto chosen = moves[moves.size() - 1];
+
+    searcher.reward(chosen, 4, 3);
+    searcher.order(moves, 0);
+
+    EXPECT_EQ(moves[0].toString(), chosen.toString());
+}
+
+TEST(Search_order, ACaptureOutranksASaturatedQuiet) {
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"));
+
+    moves.generateLegal(board);
+
+    Move quiet;
+
+    for (auto i = 0; i < moves.size(); ++i)
+        if (moves[i].getCapture() == EMPTY && !moves[i].getPromotion())
+            quiet = moves[i];
+
+    ASSERT_NE(0, static_cast<int>(quiet));
+
+    for (auto i = 0; i < 4000; ++i)
+        searcher.reward(quiet, 64, 7);
+
+    searcher.order(moves, 0);
+
+    EXPECT_NE(EMPTY, moves[0].getCapture());
+}
+
+TEST(Search, OrderingDoesNotLeakBetweenSearches) {
+
+    Board first,
+          second;
+
+    ASSERT_TRUE(first.setFen("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w - - 4 4"));
+    ASSERT_TRUE(second.setFen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"));
+
+    Search reused,
+           fresh;
+
+    reused.bestMove(first, 4);
+
+    auto warmed = reused.bestMove(second, 4);
+    auto after  = reused.getNodes();
+
+    auto cold  = fresh.bestMove(second, 4);
+    auto alone = fresh.getNodes();
+
+    EXPECT_EQ(static_cast<int>(cold), static_cast<int>(warmed));
+    EXPECT_EQ(alone, after);
 }
 
 TEST(Search_order, KnightOutranksPawn) {
@@ -323,7 +437,7 @@ TEST(Search_order, KnightOutranksPawn) {
     ASSERT_TRUE(board.setFen("7k/8/8/2pn4/1P6/8/8/3Q2K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves);
+    searcher.order(moves, 0);
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");
@@ -344,7 +458,7 @@ TEST(Search_order, RookOutranksBishop) {
     ASSERT_TRUE(board.setFen("7k/8/8/2br4/1P6/8/8/3Q3K w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves);
+    searcher.order(moves, 0);
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");
@@ -365,7 +479,7 @@ TEST(Search_order, BishopOutranksKnight) {
     ASSERT_TRUE(board.setFen("7k/8/8/2nb4/1P6/8/8/3Q2K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves);
+    searcher.order(moves, 0);
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");
@@ -385,7 +499,7 @@ TEST(Search_order, QueenOutranksRook) {
     ASSERT_TRUE(board.setFen("7k/8/8/2rq4/1P6/8/8/3Q2K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves);
+    searcher.order(moves, 0);
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");

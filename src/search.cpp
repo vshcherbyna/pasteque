@@ -41,9 +41,11 @@ Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_tim
     Judge::init();
 }
 
-void Search::order(Moves & moves) {
+void Search::order(Moves & moves, int ply) {
 
     int scores[MOVE_LIMIT];
+
+    auto remembered = ply >= 0 && ply < static_cast<int>(PLY_LIMIT);
 
     for (auto i = 0; i < moves.size(); ++i) {
         auto move  = moves[i];
@@ -51,6 +53,12 @@ void Search::order(Moves & moves) {
 
         if (move.getCapture() != EMPTY)
             score = ORDER_CAPTURE + ORDER_VICTIM * ORDER_VALUES[move.getCapture() & 7] - ORDER_VALUES[move.getPiece() & 7];
+        else if (remembered && static_cast<int>(move) == static_cast<int>(m_killers[ply][0]))
+            score = ORDER_KILLER + 1;
+        else if (remembered && static_cast<int>(move) == static_cast<int>(m_killers[ply][1]))
+            score = ORDER_KILLER;
+        else
+            score = m_merit[move.getPiece() & 15][move.getTo()];
 
         if (move.getPromotion())
             score += ORDER_PROMOTION + ORDER_VALUES[move.getPromotion() & 7];
@@ -72,6 +80,28 @@ void Search::order(Moves & moves) {
         moves[j + 1]  = move;
         scores[j + 1] = score;
     }
+}
+
+void Search::reward(Move move, int depth, int ply) {
+
+    if (move.getCapture() != EMPTY || move.getPromotion())
+        return;
+
+    auto & earned = m_merit[move.getPiece() & 15][move.getTo()];
+
+    earned += depth * depth;
+
+    if (earned > static_cast<int>(ORDER_MERIT))
+        earned = ORDER_MERIT;
+
+    if (ply < 0 || ply >= static_cast<int>(PLY_LIMIT))
+        return;
+
+    if (static_cast<int>(m_killers[ply][0]) == static_cast<int>(move))
+        return;
+
+    m_killers[ply][1] = m_killers[ply][0];
+    m_killers[ply][0] = move;
 }
 
 void Search::pollClock() {
@@ -131,7 +161,7 @@ int Search::quiescence(Board & board, int alpha, int beta, int ply) {
     if (expired)
         return EVEN_SCORE;
 
-    order(moves);
+    order(moves, ply);
 
     for (auto i = 0; i < moves.size(); ++i) {
         auto move = moves[i];
@@ -188,7 +218,7 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (ply > 0 && board.getFifty() >= 100)
         return EVEN_SCORE;
 
-    order(moves);
+    order(moves, ply);
 
     auto best = -static_cast<int>(HUGE_SCORE);
 
@@ -213,8 +243,10 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
 
         alpha = score;
 
-        if (alpha >= beta)
+        if (alpha >= beta) {
+            reward(moves[i], depth, ply);
             break;
+        }
     }
 
     return best;
@@ -248,13 +280,22 @@ Move Search::deepen(Board & board, int depth, Instant started, unsigned int soft
     m_nodes = 0;
     m_score = 0;
 
+    for (auto ply = 0; ply < static_cast<int>(PLY_LIMIT); ++ply) {
+        m_killers[ply][0] = Move();
+        m_killers[ply][1] = Move();
+    }
+
+    for (auto piece = 0; piece < 16; ++piece)
+        for (auto square = 0; square < 64; ++square)
+            m_merit[piece][square] = 0;
+
     Moves moves;
     moves.generateLegal(board);
 
     if (!moves.size())
         return Move();
 
-    order(moves);
+    order(moves, 0);
 
     auto best = moves[0];
 
