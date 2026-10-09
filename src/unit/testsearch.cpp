@@ -301,7 +301,7 @@ TEST(Search_order, VictimThenAttacker) {
     ASSERT_TRUE(board.setFen("7k/8/8/2n1q3/3P4/8/8/4R1K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), "d4e5");
     EXPECT_EQ(moves[1].toString(), "e1e5");
@@ -325,7 +325,7 @@ TEST(Search_order, AKillerOutranksTheRichestQuiet) {
         searcher.reward(richest, 64, 5);
 
     searcher.reward(killer, 1, 0);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), killer.toString());
 }
@@ -368,7 +368,7 @@ TEST(Search_order, MeritOutlivesThePlyThatEarnedIt) {
     auto chosen = moves[moves.size() - 1];
 
     searcher.reward(chosen, 4, 3);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), chosen.toString());
 }
@@ -394,9 +394,386 @@ TEST(Search_order, ACaptureOutranksASaturatedQuiet) {
     for (auto i = 0; i < 4000; ++i)
         searcher.reward(quiet, 64, 7);
 
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_NE(EMPTY, moves[0].getCapture());
+}
+
+TEST(Search_hash, AnEntryBelongsToItsHalfmoveClock) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x1324354657687980ULL;
+
+    searcher.store(key, 96, 1, 0, 40, HASH_EXACT, Move(21u));
+
+    EXPECT_TRUE(searcher.probe(key, 96, 1, 0, -300, 300, found, favoured));
+    EXPECT_FALSE(searcher.probe(key, 97, 1, 0, -300, 300, found, favoured));
+    EXPECT_FALSE(searcher.probe(key, 98, 1, 0, -300, 300, found, favoured));
+    EXPECT_FALSE(searcher.probe(key, 95, 1, 0, -300, 300, found, favoured));
+}
+
+TEST(Search_hash, BelowTheHorizonTheClockIsIgnoredOnPurpose) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x2435465768798a9bULL;
+
+    searcher.store(key, 0, 1, 0, 40, HASH_EXACT, Move(22u));
+
+    EXPECT_TRUE(searcher.probe(key, 0, 1, 0, -300, 300, found, favoured));
+    EXPECT_TRUE(searcher.probe(key, static_cast<int>(HASH_HORIZON) - 1, 1, 0, -300, 300, found, favoured));
+    EXPECT_FALSE(searcher.probe(key, static_cast<int>(HASH_HORIZON), 1, 0, -300, 300, found, favoured));
+}
+
+TEST(Search_hash, LoweringHashReleasesTheMemory) {
+
+    Search searcher;
+
+    searcher.setHash(64);
+
+    auto roomy = searcher.m_hash.capacity();
+
+    searcher.setHash(1);
+
+    EXPECT_LT(searcher.m_hash.capacity(), roomy);
+    EXPECT_EQ(searcher.m_hash.capacity(), searcher.getSlots());
+}
+
+TEST(Search_hash, SetHashRoundsDownToAPowerOfTwo) {
+
+    Search searcher;
+
+    EXPECT_EQ(static_cast<size_t>(262144), searcher.getSlots());
+
+    searcher.setHash(1);
+    EXPECT_EQ(static_cast<size_t>(65536), searcher.getSlots());
+
+    searcher.setHash(64);
+    EXPECT_EQ(static_cast<size_t>(4194304), searcher.getSlots());
+
+    searcher.setHash(1000);
+    EXPECT_EQ(static_cast<size_t>(33554432), searcher.getSlots());
+}
+
+TEST(Search_hash, SetHashClampsWhatItIsGiven) {
+
+    Search searcher;
+
+    searcher.setHash(0);
+
+    auto least = searcher.getSlots();
+
+    searcher.setHash(-99);
+    EXPECT_EQ(least, searcher.getSlots());
+
+    searcher.setHash(HASH_MOST);
+
+    auto most = searcher.getSlots();
+
+    searcher.setHash(999999);
+    EXPECT_EQ(most, searcher.getSlots());
+
+    EXPECT_GT(most, least);
+}
+
+TEST(Search_hash, ResizingEmptiesTheTable) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x7766554433221100ULL;
+
+    searcher.store(key, 0, 6, 0, 64, HASH_EXACT, Move(12u));
+
+    ASSERT_TRUE(searcher.probe(key, 0, 6, 0, -300, 300, found, favoured));
+
+    searcher.setHash(16);
+
+    EXPECT_FALSE(searcher.probe(key, 0, 6, 0, -300, 300, found, favoured));
+}
+
+TEST(Search_hash, AnEmptySlotIsNotAHit) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    EXPECT_FALSE(searcher.probe(0x12345678ULL, 0, 1, 1, -100, 100, found, favoured));
+    EXPECT_EQ(0, static_cast<int>(favoured));
+}
+
+TEST(Search_hash, KeepsAndFindsAnExactScore) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    searcher.store(0x1234567890abcdefULL, 0, 6, 3, 142, HASH_EXACT, Move(4321u));
+
+    ASSERT_TRUE(searcher.probe(0x1234567890abcdefULL, 0, 6, 3, -100, 100, found, favoured));
+
+    EXPECT_EQ(142, found);
+    EXPECT_EQ(4321, static_cast<int>(favoured));
+}
+
+TEST(Search_hash, AMateScoreComesBackAtTheSamePly) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    auto mate = static_cast<int>(MATE_SCORE) - 9;
+
+    searcher.store(0xfeedfacecafebeefULL, 0, 4, 9, mate, HASH_EXACT, Move(1u));
+
+    ASSERT_TRUE(searcher.probe(0xfeedfacecafebeefULL, 0, 4, 9, -30000, 30000, found, favoured));
+
+    EXPECT_EQ(mate, found);
+}
+
+TEST(Search_hash, BoundsOnlyAnswerWhereTheyApply) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    searcher.store(0x1111222233334444ULL, 0, 5, 0, 50, HASH_UPPER, Move(7u));
+
+    EXPECT_TRUE(searcher.probe(0x1111222233334444ULL, 0, 5, 0, 60, 120, found, favoured));
+    EXPECT_FALSE(searcher.probe(0x1111222233334444ULL, 0, 5, 0, 10, 120, found, favoured));
+
+    searcher.store(0x5555666677778888ULL, 0, 5, 0, 50, HASH_LOWER, Move(7u));
+
+    EXPECT_TRUE(searcher.probe(0x5555666677778888ULL, 0, 5, 0, -120, 40, found, favoured));
+    EXPECT_FALSE(searcher.probe(0x5555666677778888ULL, 0, 5, 0, -120, 90, found, favoured));
+}
+
+TEST(Search_hash, AShallowEntryStillOffersItsMove) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    searcher.store(0x99aabbccddeeff00ULL, 0, 2, 0, 33, HASH_EXACT, Move(555u));
+
+    EXPECT_FALSE(searcher.probe(0x99aabbccddeeff00ULL, 0, 8, 0, -100, 100, found, favoured));
+    EXPECT_EQ(555, static_cast<int>(favoured));
+}
+
+TEST(Search_hash, ANeighbourInTheSameSlotIsNotAHit) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0xabcd000012345678ULL;
+
+    searcher.store(key, 0, 6, 0, 77, HASH_EXACT, Move(9u));
+
+    EXPECT_TRUE(searcher.probe(key, 0, 6, 0, -100, 100, found, favoured));
+
+    EXPECT_FALSE(searcher.probe(key ^ (1ULL << 40), 0, 6, 0, -100, 100, found, favoured));
+}
+
+TEST(Search_order, TheHashMoveLeadsEvenPastACapture) {
+
+    Board  board;
+    Search searcher;
+    Moves  moves;
+
+    ASSERT_TRUE(board.setFen("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"));
+
+    moves.generateLegal(board);
+
+    Move quiet;
+
+    for (auto i = 0; i < moves.size(); ++i)
+        if (moves[i].getCapture() == EMPTY && !moves[i].getPromotion())
+            quiet = moves[i];
+
+    ASSERT_NE(0, static_cast<int>(quiet));
+
+    searcher.order(moves, 0, quiet);
+
+    EXPECT_EQ(moves[0].toString(), quiet.toString());
+    EXPECT_EQ(EMPTY, moves[0].getCapture());
+}
+
+TEST(Search, TheTableDoesNotCarryIntoTheNextSearch) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w - - 4 4"));
+
+    searcher.bestMove(board, 5);
+
+    auto first = searcher.getNodes();
+
+    searcher.bestMove(board, 5);
+
+    auto again = searcher.getNodes();
+
+    EXPECT_EQ(first, again);
+}
+
+TEST(Search, TheFiftyMoveRuleOutranksAHashScore) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("8/2K5/6Q1/1k6/8/8/8/8 w - - 94 1"));
+
+    for (auto depth = 6; depth <= 8; ++depth) {
+        searcher.bestMove(board, depth);
+
+        EXPECT_EQ(static_cast<int>(EVEN_SCORE), searcher.getScore()) << "depth " << depth;
+    }
+}
+
+TEST(Search, CheckmateOutranksTheFiftyMoveRule) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("7k/8/6QK/8/8/8/8/8 w - - 99 1"));
+
+    auto best = searcher.bestMove(board, 3);
+
+    EXPECT_EQ("g6g7", best.toString());
+    EXPECT_GT(searcher.getScore(), static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT));
+}
+
+TEST(Search_hash, AnEntryIsJudgedByItsOwnDepthNotTheRequest) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x0a1b2c3d4e5f6071ULL;
+
+    searcher.store(key, 0, 5, 0, 50, HASH_EXACT, Move(8u));
+
+    EXPECT_TRUE(searcher.probe(key, 0, 1, 0, -300, 300, found, favoured));
+    EXPECT_FALSE(searcher.probe(key, 96, 1, 0, -300, 300, found, favoured));
+}
+
+TEST(Search_hash, ADeeperEntryIsRefusedNearTheFiftyMoveRule) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x2468ace013579bdfULL;
+
+    searcher.store(key, 0, 3, 0, static_cast<int>(MATE_SCORE) - 3, HASH_EXACT, Move(3u));
+
+    EXPECT_TRUE(searcher.probe(key, 0, 1, 0, -30000, 30000, found, favoured));
+    EXPECT_FALSE(searcher.probe(key, 98, 1, 0, -30000, 30000, found, favoured));
+
+    EXPECT_EQ(3, static_cast<int>(favoured));
+}
+
+TEST(Search_hash, AMateIsNotKeptWhenTheDrawArrivesFirst) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x1357ace2468bdf09ULL;
+
+    searcher.store(key, 94, 2, 0, static_cast<int>(MATE_SCORE) - 9, HASH_EXACT, Move(5u));
+
+    EXPECT_FALSE(searcher.probe(key, 94, 1, 0, -30000, 30000, found, favoured));
+    EXPECT_EQ(0, static_cast<int>(favoured));
+}
+
+TEST(Search, ACachedScoreDoesNotOutrunTheDraw) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("8/r3b3/8/8/2k5/5Q2/3K4/8 b - - 94 1"));
+
+    for (auto depth = 5; depth <= 6; ++depth) {
+        searcher.bestMove(board, depth);
+
+        EXPECT_EQ(static_cast<int>(EVEN_SCORE), searcher.getScore()) << "depth " << depth;
+    }
+}
+
+TEST(Search, AMateBeyondTheDrawIsNotClaimed) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("8/8/1k6/8/1K6/8/8/2Q5 w - - 92 1"));
+
+    for (auto depth = 6; depth <= 9; ++depth) {
+        searcher.bestMove(board, depth);
+
+        auto score = searcher.getScore();
+
+        EXPECT_LT(score, static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT)) << "depth " << depth;
+
+        if (depth >= 8) {
+            EXPECT_EQ(static_cast<int>(EVEN_SCORE), score) << "depth " << depth;
+        }
+    }
+}
+
+TEST(Search_hash, ADeeperEntrySurvivesAShallowOne) {
+
+    Search searcher;
+
+    int  found = 0;
+    Move favoured;
+
+    stamp key = 0x0f1e2d3c4b5a6978ULL;
+
+    searcher.store(key, 0, 8, 0, 111, HASH_EXACT, Move(11u));
+    searcher.store(key, 0, 2, 0, 222, HASH_EXACT, Move(22u));
+
+    ASSERT_TRUE(searcher.probe(key, 0, 8, 0, -500, 500, found, favoured));
+
+    EXPECT_EQ(111, found);
+    EXPECT_EQ(11, static_cast<int>(favoured));
+}
+
+TEST(Search_hash, ASearchFillsTheTable) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w - - 4 4"));
+
+    searcher.bestMove(board, 5);
+
+    auto filled = 0;
+
+    for (size_t i = 0; i < searcher.m_slots; ++i)
+        if (searcher.m_hash[i].age == searcher.m_age)
+            ++filled;
+
+    EXPECT_GT(filled, 0);
 }
 
 TEST(Search, OrderingDoesNotLeakBetweenSearches) {
@@ -437,7 +814,7 @@ TEST(Search_order, KnightOutranksPawn) {
     ASSERT_TRUE(board.setFen("7k/8/8/2pn4/1P6/8/8/3Q2K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");
@@ -458,7 +835,7 @@ TEST(Search_order, RookOutranksBishop) {
     ASSERT_TRUE(board.setFen("7k/8/8/2br4/1P6/8/8/3Q3K w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");
@@ -479,7 +856,7 @@ TEST(Search_order, BishopOutranksKnight) {
     ASSERT_TRUE(board.setFen("7k/8/8/2nb4/1P6/8/8/3Q2K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");
@@ -499,7 +876,7 @@ TEST(Search_order, QueenOutranksRook) {
     ASSERT_TRUE(board.setFen("7k/8/8/2rq4/1P6/8/8/3Q2K1 w - - 0 1"));
 
     moves.generateLegal(board);
-    searcher.order(moves, 0);
+    searcher.order(moves, 0, Move());
 
     EXPECT_EQ(moves[0].toString(), "d1d5");
     EXPECT_EQ(moves[1].toString(), "b4c5");

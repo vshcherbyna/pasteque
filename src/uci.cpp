@@ -133,6 +133,8 @@ void Uci::handleCommand(const std::string & line) {
         onIsReady();
     else if (command == "ucinewgame")
         onNewGame();
+    else if (command == "setoption")
+        onSetOption(tokens);
     else if (command == "position")
         onPosition(tokens);
     else if (command == "go")
@@ -150,6 +152,9 @@ void Uci::onBench(const std::vector<std::string> & tokens) {
 void Uci::onUci() {
     std::cout << "id name " << ENGINE_NAME << " " << ENGINE_VERSION << " " << ENGINE_ARCH << std::endl;
     std::cout << "id author " << ENGINE_AUTHOR << std::endl;
+    std::cout << "option name Hash type spin default " << static_cast<int>(HASH_DEFAULT)
+              << " min " << static_cast<int>(HASH_LEAST)
+              << " max " << static_cast<int>(HASH_MOST) << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -182,6 +187,27 @@ bool Uci::playMove(const std::string & notation) {
     }
 
     return false;
+}
+
+void Uci::onSetOption(const std::vector<std::string> & tokens) {
+
+    std::string name,
+                value;
+
+    size_t i = 1;
+
+    if (i < tokens.size() && tokens[i] == "name") {
+        for (++i; i < tokens.size() && tokens[i] != "value"; ++i)
+            name += (name.empty() ? "" : " ") + tokens[i];
+    }
+
+    if (i < tokens.size() && tokens[i] == "value") {
+        for (++i; i < tokens.size(); ++i)
+            value += (value.empty() ? "" : " ") + tokens[i];
+    }
+
+    if (name == "Hash" && !value.empty())
+        m_searcher.setHash(std::atoi(value.c_str()));
 }
 
 void Uci::onPosition(const std::vector<std::string> & tokens) {
@@ -224,11 +250,9 @@ void Uci::onGo(const std::vector<std::string> & tokens) {
 
     Clock clock(tokens, m_board.getSide());
 
-    Search searcher;
+    m_searcher.setWatcher(report);
 
-    searcher.setWatcher(report);
-
-    auto best = searcher.bestMove(m_board, clock);
+    auto best = m_searcher.bestMove(m_board, clock);
 
     if (static_cast<int>(best) == 0)
         std::cout << "bestmove 0000" << std::endl;

@@ -26,6 +26,7 @@
 #include "pasteque.h"
 #include "board.h"
 #include "clock.h"
+#include "search.h"
 
 pasteque_namespace_begin
 
@@ -49,15 +50,21 @@ private:
     void onIsReady();
     void onNewGame();
     void onPosition(const std::vector<std::string> & tokens);
+    void onSetOption(const std::vector<std::string> & tokens);
     void onGo(const std::vector<std::string> & tokens);
     void onBench(const std::vector<std::string> & tokens);
 
 private:
     bool playMove(const std::string & notation);
 
+#if defined(UNIT_TEST)
+public:
+#else
 private:
-    Board m_board;
-    bool  m_departing;
+#endif
+    Board   m_board;
+    Search  m_searcher;
+    bool    m_departing;
 };
 
 pasteque_namespace_end
