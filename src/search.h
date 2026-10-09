@@ -20,6 +20,8 @@
 #ifndef SEARCH_H
 #define SEARCH_H
 
+#include <vector>
+
 #include "pasteque.h"
 #include "board.h"
 #include "moves.h"
@@ -39,7 +41,40 @@ enum
     ORDER_PROMOTION = 200000,
     ORDER_VICTIM    = 32,
     ORDER_KILLER    = 90000,
-    ORDER_MERIT     = 80000
+    ORDER_MERIT     = 80000,
+    ORDER_HASH      = 300000
+};
+
+enum
+{
+    HASH_DEFAULT = 4,
+    HASH_LEAST   = 1,
+    HASH_MOST    = 1024
+};
+
+enum
+{
+    HASH_HORIZON = 20
+};
+
+enum
+{
+    HASH_EXACT = 1,
+    HASH_UPPER = 2,
+    HASH_LOWER = 3
+};
+
+struct HashEntry
+{
+    unsigned int    check,
+                    age;
+
+    int             move;
+
+    short           score;
+
+    signed char     depth;
+    unsigned char   bound;
 };
 
 typedef void (*Watcher)(int depth, int score, unsigned long long nodes, unsigned long long msec, Move best);
@@ -53,10 +88,12 @@ public:
     Move                bestMove(Board & board, int depth);
     Move                bestMove(Board & board, const Clock & clock);
     void                setWatcher(Watcher watcher) { m_watcher = watcher; }
+    void                setHash(int megabytes);
 
 public:
     unsigned long long  getNodes() const { return m_nodes; }
     int                 getScore() const { return m_score; }
+    size_t              getSlots() const { return m_slots; }
 
 #if defined(UNIT_TEST)
 public:
@@ -66,8 +103,10 @@ private:
     Move                deepen(Board & board, int depth, Instant started, unsigned int soft);
     int                 alphaBeta(Board & board, int alpha, int beta, int depth, int ply);
     int                 quiescence(Board & board, int alpha, int beta, int ply);
-    void                order(Moves & moves, int ply);
+    void                order(Moves & moves, int ply, Move favoured);
     void                reward(Move move, int depth, int ply);
+    bool                probe(stamp key, int fifty, int depth, int ply, int alpha, int beta, int & score, Move & favoured);
+    void                store(stamp key, int fifty, int depth, int ply, int score, int bound, Move move);
     void                pollClock();
 
 private:
@@ -88,6 +127,10 @@ private:
 #endif
     Move                m_killers[PLY_LIMIT][2] = {};
     int                 m_merit[16][64] = {};
+
+    std::vector<HashEntry>  m_hash;
+    size_t              m_slots = 0;
+    unsigned int        m_age = 1;
 };
 
 pasteque_namespace_end

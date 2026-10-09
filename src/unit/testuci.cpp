@@ -109,6 +109,45 @@ TEST(Uci_handshake, Positive)
     EXPECT_EQ(speak(handler, "isready"), "readyok\n");
 }
 
+TEST(Uci_options, HashIsAdvertisedAndHonoured) {
+
+    Uci handler;
+
+    auto greeting = speak(handler, "uci");
+
+    EXPECT_TRUE(mentions(greeting, "option name Hash type spin default 4 min 1 max 1024"));
+
+    auto standard = handler.m_searcher.getSlots();
+
+    speak(handler, "setoption name Hash value 64");
+
+    EXPECT_GT(handler.m_searcher.getSlots(), standard);
+
+    speak(handler, "setoption name Hash value 1");
+
+    EXPECT_LT(handler.m_searcher.getSlots(), standard);
+}
+
+TEST(Uci_options, Negative)
+{
+    Uci handler;
+
+    auto standard = handler.m_searcher.getSlots();
+
+    speak(handler, "setoption");
+    speak(handler, "setoption name");
+    speak(handler, "setoption name Hash");
+    speak(handler, "setoption name Hash value");
+    speak(handler, "setoption value 64");
+    speak(handler, "setoption name Ponder value true");
+    speak(handler, "setoption name hash value 64");
+
+    EXPECT_EQ(standard, handler.m_searcher.getSlots());
+    EXPECT_FALSE(handler.departing());
+
+    EXPECT_EQ(speak(handler, "isready"), "readyok\n");
+}
+
 TEST(Uci_quit, Positive)
 {
     Uci handler;

@@ -26,7 +26,7 @@
 pasteque_namespace_begin
 
 inline constexpr const char * ENGINE_NAME    = "Pasteque";
-inline constexpr const char * ENGINE_VERSION = "0.0.8";
+inline constexpr const char * ENGINE_VERSION = "0.0.9";
 inline constexpr const char * ENGINE_AUTHOR  = "Volodymyr Shcherbyna (2018-2026)";
 
 inline constexpr const char * ENGINE_ARCH =

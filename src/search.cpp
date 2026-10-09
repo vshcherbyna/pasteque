@@ -39,9 +39,30 @@ static const int ORDER_VALUES[8] = { 0, 199, 100, 627, 0, 226, 335, 627 };
 
 Search::Search() : m_nodes{0}, m_quota{0}, m_score{0}, m_watcher{nullptr}, m_timed{false}, m_aborted{false} {
     Judge::init();
+    setHash(HASH_DEFAULT);
 }
 
-void Search::order(Moves & moves, int ply) {
+void Search::setHash(int megabytes) {
+
+    if (megabytes < static_cast<int>(HASH_LEAST))
+        megabytes = HASH_LEAST;
+
+    if (megabytes > static_cast<int>(HASH_MOST))
+        megabytes = HASH_MOST;
+
+    auto room  = static_cast<size_t>(megabytes) * 1024 * 1024 / sizeof(HashEntry);
+    auto slots = static_cast<size_t>(1);
+
+    while (slots * 2 <= room)
+        slots *= 2;
+
+    m_slots = slots;
+    m_age   = 1;
+
+    m_hash = std::vector<HashEntry>(slots);
+}
+
+void Search::order(Moves & moves, int ply, Move favoured) {
 
     int scores[MOVE_LIMIT];
 
@@ -51,7 +72,9 @@ void Search::order(Moves & moves, int ply) {
         auto move  = moves[i];
         auto score = 0;
 
-        if (move.getCapture() != EMPTY)
+        if (static_cast<int>(favoured) && static_cast<int>(move) == static_cast<int>(favoured))
+            score = ORDER_HASH;
+        else if (move.getCapture() != EMPTY)
             score = ORDER_CAPTURE + ORDER_VICTIM * ORDER_VALUES[move.getCapture() & 7] - ORDER_VALUES[move.getPiece() & 7];
         else if (remembered && static_cast<int>(move) == static_cast<int>(m_killers[ply][0]))
             score = ORDER_KILLER + 1;
@@ -80,6 +103,82 @@ void Search::order(Moves & moves, int ply) {
         moves[j + 1]  = move;
         scores[j + 1] = score;
     }
+}
+
+static unsigned int signet(stamp key, int fifty) {
+
+    auto plain = static_cast<unsigned int>(key >> 32);
+
+    if (fifty < static_cast<int>(HASH_HORIZON))
+        return plain;
+
+    return plain ^ (static_cast<unsigned int>(fifty) * 2654435769u);
+}
+
+static int lookahead(int score, int depth) {
+
+    if (score > static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT))
+        return static_cast<int>(MATE_SCORE) - score;
+
+    if (score < -static_cast<int>(MATE_SCORE) + static_cast<int>(PLY_LIMIT))
+        return static_cast<int>(MATE_SCORE) + score;
+
+    return depth;
+}
+
+bool Search::probe(stamp key, int fifty, int depth, int ply, int alpha, int beta, int & score, Move & favoured) {
+
+    auto & slot = m_hash[key & (m_slots - 1)];
+
+    if (slot.age != m_age || slot.check != signet(key, fifty))
+        return false;
+
+    favoured = Move(static_cast<unsigned int>(slot.move));
+
+    if (slot.depth < depth)
+        return false;
+
+    auto kept = static_cast<int>(slot.score);
+
+    if (fifty + lookahead(kept, slot.depth) >= 100)
+        return false;
+
+    if (kept > static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT))
+        kept -= ply;
+    else if (kept < -static_cast<int>(MATE_SCORE) + static_cast<int>(PLY_LIMIT))
+        kept += ply;
+
+    if (slot.bound == HASH_EXACT
+        || (slot.bound == HASH_LOWER && kept >= beta)
+        || (slot.bound == HASH_UPPER && kept <= alpha)) {
+        score = kept;
+        return true;
+    }
+
+    return false;
+}
+
+void Search::store(stamp key, int fifty, int depth, int ply, int score, int bound, Move move) {
+
+    if (score > static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT))
+        score += ply;
+    else if (score < -static_cast<int>(MATE_SCORE) + static_cast<int>(PLY_LIMIT))
+        score -= ply;
+
+    if (fifty + lookahead(score, depth) >= 100)
+        return;
+
+    auto & slot = m_hash[key & (m_slots - 1)];
+
+    if (slot.age == m_age && slot.depth > depth)
+        return;
+
+    slot.check = signet(key, fifty);
+    slot.age   = m_age;
+    slot.move  = static_cast<int>(move);
+    slot.score = static_cast<short>(score);
+    slot.depth = static_cast<signed char>(depth);
+    slot.bound = static_cast<unsigned char>(bound);
 }
 
 void Search::reward(Move move, int depth, int ply) {
@@ -161,7 +260,7 @@ int Search::quiescence(Board & board, int alpha, int beta, int ply) {
     if (expired)
         return EVEN_SCORE;
 
-    order(moves, ply);
+    order(moves, ply, Move());
 
     for (auto i = 0; i < moves.size(); ++i) {
         auto move = moves[i];
@@ -209,6 +308,14 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (m_aborted)
         return 0;
 
+    auto opening = alpha;
+    auto kept    = 0;
+
+    Move favoured;
+
+    if (probe(board.getStamp(), board.getFifty(), depth, ply, alpha, beta, kept, favoured))
+        return kept;
+
     Moves moves;
     moves.generateLegal(board);
 
@@ -218,9 +325,11 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (ply > 0 && board.getFifty() >= 100)
         return EVEN_SCORE;
 
-    order(moves, ply);
+    order(moves, ply, favoured);
 
     auto best = -static_cast<int>(HUGE_SCORE);
+
+    Move chosen;
 
     for (auto i = 0; i < moves.size(); ++i) {
 
@@ -236,7 +345,8 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
         if (score <= best)
             continue;
 
-        best = score;
+        best   = score;
+        chosen = moves[i];
 
         if (score <= alpha)
             continue;
@@ -248,6 +358,10 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
             break;
         }
     }
+
+    auto bound = (best >= beta) ? HASH_LOWER : ((best > opening) ? HASH_EXACT : HASH_UPPER);
+
+    store(board.getStamp(), board.getFifty(), depth, ply, best, bound, chosen);
 
     return best;
 }
@@ -280,6 +394,9 @@ Move Search::deepen(Board & board, int depth, Instant started, unsigned int soft
     m_nodes = 0;
     m_score = 0;
 
+    if (++m_age == 0)
+        m_age = 1;
+
     for (auto ply = 0; ply < static_cast<int>(PLY_LIMIT); ++ply) {
         m_killers[ply][0] = Move();
         m_killers[ply][1] = Move();
@@ -295,7 +412,7 @@ Move Search::deepen(Board & board, int depth, Instant started, unsigned int soft
     if (!moves.size())
         return Move();
 
-    order(moves, 0);
+    order(moves, 0, Move());
 
     auto best = moves[0];
 
