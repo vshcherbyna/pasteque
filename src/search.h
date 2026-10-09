@@ -59,6 +59,14 @@ enum
 
 enum
 {
+    REDUCE_DEPTH      = 3,
+    REDUCE_MOVES      = 3,
+    REDUCE_MORE_DEPTH = 6,
+    REDUCE_MORE_MOVES = 6
+};
+
+enum
+{
     HASH_EXACT = 1,
     HASH_UPPER = 2,
     HASH_LOWER = 3
@@ -104,6 +112,7 @@ private:
     int                 alphaBeta(Board & board, int alpha, int beta, int depth, int ply);
     int                 quiescence(Board & board, int alpha, int beta, int ply);
     void                order(Moves & moves, int ply, Move favoured);
+    int                 reduce(Move move, int depth, int played, bool checked, bool checking);
     void                reward(Move move, int depth, int ply);
     bool                probe(stamp key, int fifty, int depth, int ply, int alpha, int beta, int & score, Move & favoured);
     void                store(stamp key, int fifty, int depth, int ply, int score, int bound, Move move);
