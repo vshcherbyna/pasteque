@@ -96,6 +96,22 @@ TEST(Search, StopsAtNodeQuota)
     EXPECT_EQ(searcher.getNodes(), 5000ULL);
 }
 
+TEST(Search, StaysInsideEveryNodeQuota) {
+
+    for (auto quota = 900ULL; quota <= 1200ULL; ++quota) {
+        Board  board;
+        Search searcher;
+
+        std::vector<std::string> counting = { "go", "nodes", std::to_string(quota) };
+
+        Clock counted(counting, board.getSide());
+
+        searcher.bestMove(board, counted);
+
+        EXPECT_EQ(searcher.getNodes(), quota) << "quota " << quota;
+    }
+}
+
 TEST(Search, DepthSearchIgnoresTheQuota)
 {
     Board  board;
@@ -774,6 +790,95 @@ TEST(Search_hash, ASearchFillsTheTable) {
             ++filled;
 
     EXPECT_GT(filled, 0);
+}
+
+TEST(Search_reduce, NothingIsReducedWhileInCheck) {
+
+    Search searcher;
+
+    Move quiet(12, 28, 1);
+
+    EXPECT_EQ(0, searcher.reduce(quiet, 8, 8, true, false));
+    EXPECT_EQ(0, searcher.reduce(quiet, 20, 30, true, false));
+}
+
+TEST(Search_reduce, NothingIsReducedForAMoveThatGivesCheck) {
+
+    Search searcher;
+
+    Move quiet(12, 28, 1);
+
+    EXPECT_EQ(0, searcher.reduce(quiet, 8, 8, false, true));
+    EXPECT_EQ(0, searcher.reduce(quiet, 20, 30, false, true));
+}
+
+TEST(Search_reduce, NothingIsReducedForCapturesOrPromotions) {
+
+    Search searcher;
+
+    Move capture(12, 28, 1, 5);
+    Move promotion(52, 60, 1, 0, 4);
+    Move both(52, 61, 1, 5, 4);
+
+    EXPECT_EQ(0, searcher.reduce(capture, 8, 8, false, false));
+    EXPECT_EQ(0, searcher.reduce(promotion, 8, 8, false, false));
+    EXPECT_EQ(0, searcher.reduce(both, 8, 8, false, false));
+}
+
+TEST(Search_reduce, TheFirstMovesAndTheShallowSearchesAreWhole) {
+
+    Search searcher;
+
+    Move quiet(12, 28, 1);
+
+    for (auto played = 0; played < static_cast<int>(REDUCE_MOVES); ++played)
+        EXPECT_EQ(0, searcher.reduce(quiet, 8, played, false, false)) << "played " << played;
+
+    for (auto depth = 1; depth < static_cast<int>(REDUCE_DEPTH); ++depth)
+        EXPECT_EQ(0, searcher.reduce(quiet, depth, 8, false, false)) << "depth " << depth;
+
+    EXPECT_LT(0, searcher.reduce(quiet, static_cast<int>(REDUCE_DEPTH), static_cast<int>(REDUCE_MOVES), false, false));
+}
+
+TEST(Search_reduce, ALateQuietMoveLosesAPlyAndADeeperOneLosesTwo) {
+
+    Search searcher;
+
+    Move quiet(12, 28, 1);
+
+    EXPECT_EQ(1, searcher.reduce(quiet, 3, 3, false, false));
+    EXPECT_EQ(1, searcher.reduce(quiet, 5, 5, false, false));
+    EXPECT_EQ(1, searcher.reduce(quiet, 20, 5, false, false));
+    EXPECT_EQ(1, searcher.reduce(quiet, 5, 20, false, false));
+    EXPECT_EQ(2, searcher.reduce(quiet, 6, 6, false, false));
+    EXPECT_EQ(2, searcher.reduce(quiet, 20, 30, false, false));
+}
+
+TEST(Search_reduce, AReducedSearchKeepsAtLeastOneRealPly) {
+
+    Search searcher;
+
+    Move quiet(12, 28, 1);
+
+    for (auto depth = 1; depth <= static_cast<int>(PLY_LIMIT); ++depth)
+        for (auto played = 0; played < 48; ++played) {
+            auto reduction = searcher.reduce(quiet, depth, played, false, false);
+
+            EXPECT_LE(0, reduction) << "depth " << depth << " played " << played;
+
+            if (reduction) {
+                EXPECT_LE(1, depth - 1 - reduction) << "depth " << depth << " played " << played;
+            }
+        }
+}
+
+TEST(Search, ReductionsDoNotLoseAMate) {
+
+    for (auto depth = 4; depth <= 10; depth += 2) {
+        auto ladder = search("7k/8/8/8/8/8/8/RR2K3 w - - 0 1", depth);
+
+        EXPECT_EQ(static_cast<int>(MATE_SCORE) - 3, ladder.score) << "depth " << depth;
+    }
 }
 
 TEST(Search, OrderingDoesNotLeakBetweenSearches) {
