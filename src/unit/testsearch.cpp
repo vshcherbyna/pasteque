@@ -792,6 +792,48 @@ TEST(Search_hash, ASearchFillsTheTable) {
     EXPECT_GT(filled, 0);
 }
 
+TEST(Search_verify, AScoreThatDoesNotBeatAlphaIsNeverSearchedAgain) {
+
+    Search searcher;
+
+    for (auto reduction = 0; reduction <= 2; ++reduction) {
+        EXPECT_FALSE(searcher.verify(10, 10, 50, reduction)) << "reduction " << reduction;
+        EXPECT_FALSE(searcher.verify(-40, 10, 50, reduction)) << "reduction " << reduction;
+    }
+}
+
+TEST(Search_verify, AWholeSearchIsRedoneOnlyInsideTheWindow) {
+
+    Search searcher;
+
+    EXPECT_TRUE(searcher.verify(30, 10, 50, 0));
+    EXPECT_FALSE(searcher.verify(50, 10, 50, 0));
+    EXPECT_FALSE(searcher.verify(90, 10, 50, 0));
+}
+
+TEST(Search_verify, AReducedSearchIsRedoneEvenAboveBeta) {
+
+    Search searcher;
+
+    EXPECT_TRUE(searcher.verify(30, 10, 50, 1));
+    EXPECT_TRUE(searcher.verify(50, 10, 50, 1));
+    EXPECT_TRUE(searcher.verify(90, 10, 50, 1));
+    EXPECT_TRUE(searcher.verify(90, 10, 50, 2));
+}
+
+TEST(Search_verify, TheWindowAndTheReductionAreBothConsulted) {
+
+    Search searcher;
+
+    for (auto score = -20; score <= 90; ++score)
+        for (auto reduction = 0; reduction <= 2; ++reduction) {
+            auto wanted = score > 10 && (reduction != 0 || score < 50);
+
+            EXPECT_EQ(wanted, searcher.verify(score, 10, 50, reduction))
+                << "score " << score << " reduction " << reduction;
+        }
+}
+
 TEST(Search_reduce, NothingIsReducedWhileInCheck) {
 
     Search searcher;

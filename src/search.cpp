@@ -145,6 +145,14 @@ int Search::reduce(Move move, int depth, int played, bool checked, bool checking
     return reduction;
 }
 
+bool Search::verify(int score, int alpha, int beta, int reduction) {
+
+    if (score <= alpha)
+        return false;
+
+    return reduction != 0 || score < beta;
+}
+
 bool Search::probe(stamp key, int fifty, int depth, int ply, int alpha, int beta, int & score, Move & favoured) {
 
     auto & slot = m_hash[key & (m_slots - 1)];
@@ -360,14 +368,14 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
         auto reduction = reduce(moves[i], depth, i, checked, board.getCheckers() != 0);
         auto score     = 0;
 
-        if (reduction) {
+        if (!i)
+            score = -alphaBeta(board, -beta, -alpha, depth - 1, ply + 1);
+        else {
             score = -alphaBeta(board, -alpha - 1, -alpha, depth - 1 - reduction, ply + 1);
 
-            if (!m_aborted && score > alpha)
+            if (!m_aborted && verify(score, alpha, beta, reduction))
                 score = -alphaBeta(board, -beta, -alpha, depth - 1, ply + 1);
         }
-        else
-            score = -alphaBeta(board, -beta, -alpha, depth - 1, ply + 1);
 
         board.unmakeMove(moves[i], undo);
 

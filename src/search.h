@@ -113,6 +113,7 @@ private:
     int                 quiescence(Board & board, int alpha, int beta, int ply);
     void                order(Moves & moves, int ply, Move favoured);
     int                 reduce(Move move, int depth, int played, bool checked, bool checking);
+    bool                verify(int score, int alpha, int beta, int reduction);
     void                reward(Move move, int depth, int ply);
     bool                probe(stamp key, int fifty, int depth, int ply, int alpha, int beta, int & score, Move & favoured);
     void                store(stamp key, int fifty, int depth, int ply, int score, int bound, Move move);
