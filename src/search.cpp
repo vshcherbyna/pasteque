@@ -145,6 +145,29 @@ int Search::reduce(Move move, int depth, int played, bool checked, bool checking
     return reduction;
 }
 
+bool Search::nullAllowed(const Board & board, int depth, int ply, int beta, bool checked) {
+
+    if (checked || ply < 1 || ply + 1 >= static_cast<int>(PLY_LIMIT))
+        return false;
+
+    if (m_nulled[ply])
+        return false;
+
+    if (depth < static_cast<int>(NULL_DEPTH))
+        return false;
+
+    if (static_cast<int>(board.getFifty()) + depth >= 100)
+        return false;
+
+    if (beta >= static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT))
+        return false;
+
+    if (beta <= -static_cast<int>(MATE_SCORE) + static_cast<int>(PLY_LIMIT))
+        return false;
+
+    return !board.onlyPawns(board.getSide());
+}
+
 bool Search::verify(int score, int alpha, int beta, int reduction) {
 
     if (score <= alpha)
@@ -352,10 +375,32 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
     if (ply > 0 && board.getFifty() >= 100)
         return EVEN_SCORE;
 
+    auto checked = board.getCheckers() != 0;
+
+    if (nullAllowed(board, depth, ply, beta, checked)) {
+
+        Rewind undo;
+
+        board.doNull(undo);
+
+        m_nulled[ply + 1] = true;
+
+        auto passed = -alphaBeta(board, -beta, -beta + 1, depth - 1 - static_cast<int>(NULL_REDUCE), ply + 1);
+
+        m_nulled[ply + 1] = false;
+
+        board.unmakeNull(undo);
+
+        if (m_aborted)
+            return 0;
+
+        if (passed >= beta)
+            return beta;
+    }
+
     order(moves, ply, favoured);
 
-    auto best    = -static_cast<int>(HUGE_SCORE);
-    auto checked = board.getCheckers() != 0;
+    auto best = -static_cast<int>(HUGE_SCORE);
 
     Move chosen;
 

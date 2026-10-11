@@ -98,7 +98,7 @@ TEST(Search, StopsAtNodeQuota)
 
 TEST(Search, StaysInsideEveryNodeQuota) {
 
-    for (auto quota = 900ULL; quota <= 1200ULL; ++quota) {
+    for (auto quota = 900ULL; quota <= 2400ULL; ++quota) {
         Board  board;
         Search searcher;
 
@@ -234,6 +234,61 @@ static const char * SEARCHED[] = {
     "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
     "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
 };
+
+static const char * CHECKING[] = {
+    "4k3/8/8/8/8/8/4r3/4K3 w - - 0 1",
+    "8/8/8/8/8/5k2/8/5K1R w - - 0 1",
+    "6k1/8/8/8/8/8/8/R5KQ w - - 0 1",
+    "2r3k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1"
+};
+
+TEST(Search, HandlesPositionsFullOfChecks) {
+    for (auto fen : CHECKING) {
+        Board board;
+        Moves legal;
+
+        ASSERT_TRUE(board.setFen(fen)) << fen;
+
+        legal.generateLegal(board);
+
+        ASSERT_NE(0, legal.size()) << fen;
+
+        auto found = search(fen, 7);
+        auto seen  = false;
+
+        for (auto i = 0; i < legal.size(); ++i)
+            if (legal[i].toString() == found.move)
+                seen = true;
+
+        EXPECT_TRUE(seen) << fen << "  ->  " << found.move;
+    }
+}
+
+TEST(Search, PassingTheTurnLeavesTheRepetitionTrailWhereItWas) {
+    Board nulled,
+          untouched;
+
+    static const char * SHUFFLE[] = { "g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8" };
+
+    for (auto notation : SHUFFLE) {
+        ASSERT_TRUE(play(nulled, notation)) << notation;
+        ASSERT_TRUE(play(untouched, notation)) << notation;
+
+        Rewind undo;
+
+        nulled.doNull(undo);
+        nulled.unmakeNull(undo);
+    }
+
+    EXPECT_EQ(untouched.fen(), nulled.fen());
+    EXPECT_EQ(untouched.getStamp(), nulled.getStamp());
+
+    ASSERT_TRUE(untouched.recurred(0));
+
+    EXPECT_TRUE(nulled.recurred(0));
+}
 
 TEST(Search, ReturnsALegalMove) {
     for (auto fen : SEARCHED) {
@@ -790,6 +845,202 @@ TEST(Search_hash, ASearchFillsTheTable) {
             ++filled;
 
     EXPECT_GT(filled, 0);
+}
+
+TEST(Search_nullAllowed, APlainMidgameNodeIsAllowed) {
+
+    Board  board;
+    Search searcher;
+
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 1, 50, false));
+    EXPECT_TRUE(searcher.nullAllowed(board, static_cast<int>(NULL_DEPTH), 4, 50, false));
+}
+
+TEST(Search_nullAllowed, NotWhileInCheckAndNotAtTheRoot) {
+
+    Board  board;
+    Search searcher;
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 1, 50, true));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 0, 50, false));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, -1, 50, false));
+}
+
+TEST(Search_nullAllowed, NeverTwiceInARow) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(searcher.nullAllowed(board, 8, 3, 50, false));
+
+    searcher.m_nulled[3] = true;
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 3, 50, false));
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 4, 50, false));
+
+    searcher.m_nulled[3] = false;
+}
+
+TEST(Search_nullAllowed, NotTooShallowAndNotAgainstAMateWindow) {
+
+    Board  board;
+    Search searcher;
+
+    for (auto depth = 0; depth < static_cast<int>(NULL_DEPTH); ++depth)
+        EXPECT_FALSE(searcher.nullAllowed(board, depth, 2, 50, false)) << "depth " << depth;
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT), false));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, static_cast<int>(MATE_SCORE), false));
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 2, static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT) - 1, false));
+}
+
+TEST(Search_nullAllowed, NotAgainstAMateWindowOnEitherSide) {
+
+    Board  board;
+    Search searcher;
+
+    auto reach = static_cast<int>(MATE_SCORE) - static_cast<int>(PLY_LIMIT);
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, reach, false));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, static_cast<int>(MATE_SCORE), false));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, -reach, false));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, -static_cast<int>(MATE_SCORE), false));
+
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 2, reach - 1, false));
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 2, -reach + 1, false));
+}
+
+TEST(Search, APassCannotManufactureAFiftyMoveDraw) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("7k/6pr/5N1p/5N2/8/8/8/R3K3 b - - 99 1"));
+
+    Moves moves;
+    moves.generateLegal(board);
+
+    ASSERT_EQ(4, moves.size());
+
+    for (auto i = 0; i < moves.size(); ++i)
+        ASSERT_EQ(static_cast<int>(PAWN), moves[i].getPiece() & 7) << moves[i].toString();
+
+    EXPECT_LT(searcher.alphaBeta(board, -1, 0, 4, 1), 0);
+}
+
+TEST(Search, APassCannotCutOffAnUnprovenMate) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("7k/6pr/5N1p/5N2/8/8/8/R3K3 b - - 0 1"));
+
+    auto alpha = -(static_cast<int>(MATE_SCORE) - 9);
+    auto beta  = -(static_cast<int>(MATE_SCORE) - 10);
+
+    EXPECT_LT(searcher.alphaBeta(board, alpha, beta, 3, 1), beta);
+}
+
+TEST(Search_nullAllowed, NotWhenTheFiftyMoveBoundaryIsInReach) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("8/8/8/4k3/8/4K3/8/7R w - - 95 1"));
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 5, 2, 50, false));
+    EXPECT_TRUE(searcher.nullAllowed(board, 4, 2, 50, false));
+
+    ASSERT_TRUE(board.setFen("8/8/8/4k3/8/4K3/8/7R w - - 0 1"));
+
+    EXPECT_TRUE(searcher.nullAllowed(board, 64, 2, 50, false));
+}
+
+TEST(Search, APassCannotSkipAnUnavoidableFiftyMoveDraw) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("8/2K5/6Q1/1k6/8/8/8/8 w - - 99 1"));
+
+    Moves moves;
+    moves.generateLegal(board);
+
+    ASSERT_EQ(29, moves.size());
+
+    for (auto i = 0; i < moves.size(); ++i) {
+
+        Rewind undo;
+
+        board.doMove(moves[i], undo);
+
+        ASSERT_EQ(100u, board.getFifty()) << moves[i].toString();
+
+        Moves replies;
+        replies.generateLegal(board);
+
+        ASSERT_NE(0, replies.size()) << moves[i].toString();
+
+        board.unmakeMove(moves[i], undo);
+    }
+
+    EXPECT_EQ(static_cast<int>(EVEN_SCORE), searcher.alphaBeta(board, 99, 100, 3, 1));
+}
+
+TEST(Search, ADeeperPassCannotManufactureAFiftyMoveDraw) {
+
+    Board  board;
+    Search searcher;
+    Search without;
+
+    ASSERT_TRUE(board.setFen("7k/5Kpr/7p/8/8/N7/Q7/8 b - - 99 1"));
+
+    Moves moves;
+    moves.generateLegal(board);
+
+    ASSERT_EQ(3, moves.size());
+
+    for (auto i = 0; i < moves.size(); ++i)
+        ASSERT_EQ(static_cast<int>(PAWN), moves[i].getPiece() & 7) << moves[i].toString();
+
+    for (auto ply = 0; ply < static_cast<int>(PLY_LIMIT); ++ply)
+        without.m_nulled[ply] = true;
+
+    for (auto depth = 4; depth <= 6; ++depth) {
+
+        auto expected = without.alphaBeta(board, -1, 0, depth, 1);
+
+        ASSERT_LT(expected, 0) << "depth " << depth;
+        EXPECT_LT(searcher.alphaBeta(board, -1, 0, depth, 1), 0) << "depth " << depth << ", " << expected << " without passes";
+    }
+}
+
+TEST(Search_nullAllowed, NotWhenThereIsNothingButPawnsToMove) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(board.setFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1"));
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, 50, false));
+
+    ASSERT_TRUE(board.setFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/4KN2 w - - 0 1"));
+
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 2, 50, false));
+
+    ASSERT_TRUE(board.setFen("4kn2/pppppppp/8/8/8/8/PPPPPPPP/4K3 b - - 0 1"));
+
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 2, 50, false));
+}
+
+TEST(Search_nullAllowed, NotWhereTheFlagWouldRunOffTheEnd) {
+
+    Board  board;
+    Search searcher;
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, static_cast<int>(PLY_LIMIT) - 1, 50, false));
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, static_cast<int>(PLY_LIMIT), 50, false));
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, static_cast<int>(PLY_LIMIT) - 2, 50, false));
 }
 
 TEST(Search_verify, AScoreThatDoesNotBeatAlphaIsNeverSearchedAgain) {

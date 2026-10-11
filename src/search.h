@@ -59,6 +59,12 @@ enum
 
 enum
 {
+    NULL_DEPTH  = 3,
+    NULL_REDUCE = 2
+};
+
+enum
+{
     REDUCE_DEPTH      = 3,
     REDUCE_MOVES      = 3,
     REDUCE_MORE_DEPTH = 6,
@@ -114,6 +120,7 @@ private:
     void                order(Moves & moves, int ply, Move favoured);
     int                 reduce(Move move, int depth, int played, bool checked, bool checking);
     bool                verify(int score, int alpha, int beta, int reduction);
+    bool                nullAllowed(const Board & board, int depth, int ply, int beta, bool checked);
     void                reward(Move move, int depth, int ply);
     bool                probe(stamp key, int fifty, int depth, int ply, int alpha, int beta, int & score, Move & favoured);
     void                store(stamp key, int fifty, int depth, int ply, int score, int bound, Move move);
@@ -136,6 +143,7 @@ public:
 private:
 #endif
     Move                m_killers[PLY_LIMIT][2] = {};
+    bool                m_nulled[PLY_LIMIT] = {};
     int                 m_merit[16][64] = {};
 
     std::vector<HashEntry>  m_hash;
