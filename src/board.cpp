@@ -146,6 +146,7 @@ void Board::clear() {
 
     m_stamp    = 0;
     m_trailPly = 0;
+    m_barrier  = 0;
 }
 
 void Board::setInitial() {
@@ -420,6 +421,7 @@ void Board::doMove(Move move, Rewind & undo) {
     undo.m_captured  = EMPTY;
     undo.m_stamp    = m_stamp;
     undo.m_trailPly = m_trailPly;
+    undo.m_barrier  = m_barrier;
 
     m_trail[m_trailPly++ & (TRAIL_LIMIT - 1)] = m_stamp;
 
@@ -481,6 +483,55 @@ void Board::doMove(Move move, Rewind & undo) {
         ++m_moveNumber;
 }
 
+void Board::doNull(Rewind & undo) {
+
+    auto side = m_side;
+
+    undo.m_rights    = m_rights;
+    undo.m_enPassant = m_enPassant;
+    undo.m_halfMoves = m_halfMoves;
+    undo.m_captured  = EMPTY;
+    undo.m_stamp     = m_stamp;
+    undo.m_trailPly  = m_trailPly;
+    undo.m_barrier   = m_barrier;
+
+    m_trail[m_trailPly++ & (TRAIL_LIMIT - 1)] = m_stamp;
+
+    m_barrier = m_trailPly;
+
+    if (m_enPassant != NO_SQUARE && passantUsable())
+        m_stamp ^= STAMP_ENPASSANT[square_file(m_enPassant)];
+
+    m_enPassant = NO_SQUARE;
+
+    m_side ^= 1;
+
+    m_stamp ^= STAMP_SIDE;
+
+    if (side == BLACK)
+        ++m_moveNumber;
+}
+
+void Board::unmakeNull(const Rewind & undo) {
+
+    m_side ^= 1;
+
+    if (m_side == BLACK)
+        --m_moveNumber;
+
+    m_rights    = undo.m_rights;
+    m_enPassant = undo.m_enPassant;
+    m_halfMoves = undo.m_halfMoves;
+
+    m_stamp    = undo.m_stamp;
+    m_trailPly = undo.m_trailPly;
+    m_barrier  = undo.m_barrier;
+}
+
+bool Board::onlyPawns(unsigned char side) const {
+    return (m_allPieces[side] ^ m_pieces[piece_of(KING, side)] ^ m_pieces[piece_of(PAWN, side)]) == 0;
+}
+
 void Board::unmakeMove(Move move, const Rewind & undo) {
 
     auto from  = move.getFrom();
@@ -517,6 +568,7 @@ void Board::unmakeMove(Move move, const Rewind & undo) {
 
     m_stamp    = undo.m_stamp;
     m_trailPly = undo.m_trailPly;
+    m_barrier  = undo.m_barrier;
 }
 
 bitboard Board::getCheckers() const {
@@ -591,10 +643,14 @@ bool Board::recurred(int ply) const {
     if (back > TRAIL_LIMIT)
         back = TRAIL_LIMIT;
 
-    auto root  = m_trailPly - ply;
-    auto found = 0;
+    auto root   = m_trailPly - ply;
+    auto oldest = m_trailPly - back;
+    auto found  = 0;
 
-    for (auto i = m_trailPly - 2; i >= m_trailPly - back; i -= 2) {
+    if (oldest < m_barrier)
+        oldest = m_barrier;
+
+    for (auto i = m_trailPly - 2; i >= oldest; i -= 2) {
         if (m_trail[i & (TRAIL_LIMIT - 1)] != m_stamp)
             continue;
 

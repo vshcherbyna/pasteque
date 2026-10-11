@@ -45,7 +45,8 @@ struct Rewind
 
     unsigned int    m_halfMoves;
 
-    int             m_trailPly;
+    int             m_trailPly,
+                    m_barrier;
 };
 
 class Board
@@ -78,6 +79,9 @@ public:
     bool            makeMove(Move move, Rewind & undo);
     void            doMove(Move move, Rewind & undo);
     void            unmakeMove(Move move, const Rewind & undo);
+    void            doNull(Rewind & undo);
+    void            unmakeNull(const Rewind & undo);
+    bool            onlyPawns(unsigned char side) const;
 
     bool            isAttacked(int square, unsigned char side) const;
     bool            isAttackedBy(int square, unsigned char side, bitboard occupied) const;
@@ -111,7 +115,8 @@ private:
     stamp           m_stamp,
                     m_trail[TRAIL_LIMIT];
 
-    int             m_trailPly;
+    int             m_trailPly,
+                    m_barrier;
 };
 
 pasteque_namespace_end
