@@ -60,7 +60,7 @@ enum
 enum
 {
     NULL_DEPTH  = 3,
-    NULL_REDUCE = 2
+    NULL_REDUCE = 3
 };
 
 enum
@@ -144,6 +144,7 @@ private:
 #endif
     Move                m_killers[PLY_LIMIT][2] = {};
     bool                m_nulled[PLY_LIMIT] = {};
+    bool                m_verifying = false;
     int                 m_merit[16][64] = {};
 
     std::vector<HashEntry>  m_hash;

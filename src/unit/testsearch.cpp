@@ -941,6 +941,67 @@ TEST(Search, APassCannotCutOffAnUnprovenMate) {
     EXPECT_LT(searcher.alphaBeta(board, alpha, beta, 3, 1), beta);
 }
 
+TEST(Search_nullAllowed, NotWhileVerifyingAPass) {
+
+    Board  board;
+    Search searcher;
+
+    ASSERT_TRUE(searcher.nullAllowed(board, 8, 2, 50, false));
+
+    searcher.m_verifying = true;
+
+    EXPECT_FALSE(searcher.nullAllowed(board, 8, 2, 50, false));
+
+    searcher.m_verifying = false;
+
+    EXPECT_TRUE(searcher.nullAllowed(board, 8, 2, 50, false));
+}
+
+TEST(Search, VerifyingTakesNoPassAnywhereBelowIt) {
+
+    auto fen = "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w - - 4 4";
+
+    Board  one;
+    Search verifying;
+
+    ASSERT_TRUE(one.setFen(fen));
+
+    verifying.m_verifying = true;
+
+    auto first = verifying.alphaBeta(one, -static_cast<int>(HUGE_SCORE), static_cast<int>(HUGE_SCORE), 7, 1);
+
+    Board  two;
+    Search blocked;
+
+    ASSERT_TRUE(two.setFen(fen));
+
+    for (auto ply = 0; ply < static_cast<int>(PLY_LIMIT); ++ply)
+        blocked.m_nulled[ply] = true;
+
+    auto second = blocked.alphaBeta(two, -static_cast<int>(HUGE_SCORE), static_cast<int>(HUGE_SCORE), 7, 1);
+
+    EXPECT_EQ(second, first);
+    EXPECT_EQ(blocked.getNodes(), verifying.getNodes());
+}
+
+TEST(Search, AnAbortLeavesNoVerificationRunning) {
+
+    for (auto quota = 1700ULL; quota <= 2200ULL; ++quota) {
+
+        Board  board;
+        Search searcher;
+
+        std::vector<std::string> counting = { "go", "nodes", std::to_string(quota) };
+
+        Clock counted(counting, board.getSide());
+
+        searcher.bestMove(board, counted);
+
+        EXPECT_EQ(searcher.getNodes(), quota) << "quota " << quota;
+        EXPECT_FALSE(searcher.m_verifying) << "quota " << quota;
+    }
+}
+
 TEST(Search_nullAllowed, NotWhenTheFiftyMoveBoundaryIsInReach) {
 
     Board  board;
