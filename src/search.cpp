@@ -147,6 +147,9 @@ int Search::reduce(Move move, int depth, int played, bool checked, bool checking
 
 bool Search::nullAllowed(const Board & board, int depth, int ply, int beta, bool checked) {
 
+    if (m_verifying)
+        return false;
+
     if (checked || ply < 1 || ply + 1 >= static_cast<int>(PLY_LIMIT))
         return false;
 
@@ -394,8 +397,20 @@ int Search::alphaBeta(Board & board, int alpha, int beta, int depth, int ply) {
         if (m_aborted)
             return 0;
 
-        if (passed >= beta)
-            return beta;
+        if (passed >= beta) {
+
+            m_verifying = true;
+
+            auto verified = alphaBeta(board, beta - 1, beta, depth - static_cast<int>(NULL_REDUCE), ply);
+
+            m_verifying = false;
+
+            if (m_aborted)
+                return 0;
+
+            if (verified >= beta)
+                return beta;
+        }
     }
 
     order(moves, ply, favoured);
